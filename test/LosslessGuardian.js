@@ -74,7 +74,7 @@ describe.only('LosslessGuardian', () => {
     const LosslessGuardian = await ethers.getContractFactory(
       'LosslessGuardian',
     );
-    guardian = await LosslessGuardian.deploy();
+    guardian = await LosslessGuardian.deploy(losslessController.address);
   });
 
   describe('setGuardAdmin', () => {
@@ -100,11 +100,73 @@ describe.only('LosslessGuardian', () => {
     });
   });
 
+  describe('LosslessController.setGuardian', () => {
+    describe('when sender is not admin', async () => {
+      it('should revert', async () => {
+        await expect(
+          losslessController
+            .connect(anotherAccount)
+            .setGuardian(guardian.address),
+        ).to.be.revertedWith('LOSSLESS: must be admin');
+      });
+    });
+
+    describe('when sender is admin', async () => {
+      it('should revert', async () => {
+        await losslessController
+          .connect(lssAdmin)
+          .setGuardian(guardian.address);
+
+        expect(await losslessController.guardian()).to.be.equal(
+          guardian.address,
+        );
+      });
+    });
+  });
+
+  describe('LosslessController.setGuardian', () => {
+    describe('when sender is not admin', async () => {
+      it('should revert', async () => {
+        await expect(
+          losslessController
+            .connect(anotherAccount)
+            .setGuardian(guardian.address),
+        ).to.be.revertedWith('LOSSLESS: must be admin');
+      });
+    });
+
+    describe('when sender is admin', async () => {
+      it('should revert', async () => {
+        await losslessController
+          .connect(lssAdmin)
+          .setGuardian(guardian.address);
+
+        expect(await losslessController.guardian()).to.be.equal(
+          guardian.address,
+        );
+      });
+    });
+  });
+
+  describe('LosslessController.setGuardedAddress', () => {
+    describe('when sender is not guardian', async () => {
+      it('should revert', async () => {
+        await expect(
+          losslessController
+            .connect(anotherAccount)
+            .setGuardedAddress(erc20.address, anotherAccount.address),
+        ).to.be.revertedWith('LOSSLESS: sender is not guardian');
+      });
+    });
+  });
+
   describe('setGuardedList', () => {
     beforeEach(async () => {
       await guardian
         .connect(admin)
         .setGuardAdmin(erc20.address, guardianAdmin.address);
+
+      await losslessController.connect(lssAdmin).setGuardian(guardian.address);
     });
 
     describe('when sender is not guard admin', () => {
@@ -130,14 +192,41 @@ describe.only('LosslessGuardian', () => {
             [oneMoreAccount.address, initialHolder.address],
             [10, 100],
           );
+      });
+    });
+  });
 
-        expect(
-          await guardian.isTransferAllowed(
-            erc20.address,
-            initialHolder.address,
-            101,
-          ),
-        ).to.be.equal(false);
+  describe.only('LERC20.transfer', () => {
+    beforeEach(async () => {
+      await guardian
+        .connect(admin)
+        .setGuardAdmin(erc20.address, guardianAdmin.address);
+
+      await losslessController.connect(lssAdmin).setGuardian(guardian.address);
+
+      await guardian
+        .connect(guardianAdmin)
+        .setGuardedList(
+          erc20.address,
+          [oneMoreAccount.address, initialHolder.address],
+          [10, 100],
+        );
+    });
+
+    describe('when transfering below limit', async () => {
+      it('should not freeze', async () => {
+        await erc20.connect(initialHolder).transfer(recipient.address, 10);
+        await erc20.connect(recipient).transfer(anotherAccount.address, 10);
+        expect(await erc20.balanceOf(anotherAccount.address)).to.be.equal(10);
+      });
+    });
+
+    describe('when transfering above limit', async () => {
+      it('should freeze', async () => {
+        await erc20.connect(initialHolder).transfer(recipient.address, 101);
+        await expect(
+          erc20.connect(recipient).transfer(anotherAccount.address, 10),
+        ).to.be.revertedWith('LOSSLESS: sender is freezed');
       });
     });
   });

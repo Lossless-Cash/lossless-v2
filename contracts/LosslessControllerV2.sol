@@ -33,6 +33,17 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
 
     ILosslessGuardian public guardian;
 
+    struct Guards {
+        mapping(address => bool) guards;
+    }
+
+    struct Freezelist {
+        mapping(address => bool) freezelist;
+    }
+
+    mapping(address => Guards) tokenGuards;
+    mapping(address => Freezelist) tokenFreezelist;
+
     event AdminChanged(address indexed previousAdmin, address indexed newAdmin);
     event RecoveryAdminChanged(address indexed previousAdmin, address indexed newAdmin);
     event PauseAdminChanged(address indexed previousAdmin, address indexed newAdmin);
@@ -51,6 +62,11 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
 
     modifier onlyLosslessAdmin() {
         require(admin == _msgSender(), "LOSSLESS: must be admin");
+        _;
+    }
+
+    modifier onlyGuardian() {
+        require(_msgSender() == address(guardian), "LOSSLESS: sender is not guardian");
         _;
     }
 
@@ -81,11 +97,6 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
         pauseAdmin = newPauseAdmin;
     }
 
-    function setGuardian(address newGuardian) public onlyLosslessAdmin {
-        emit GuardianSet(address(guardian), newGuardian);
-        guardian = ILosslessGuardian(newGuardian);
-    }   
-
 
     // --- GETTERS ---
 
@@ -95,12 +106,44 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
 
     // GUARDS ADMINISTRATION
 
+    function setGuardian(address newGuardian) public onlyLosslessAdmin {
+        emit GuardianSet(address(guardian), newGuardian);
+        guardian = ILosslessGuardian(newGuardian);
+    }   
+
+    function setGuardedAddress(address token, address guardedAddress) external {
+        require(_msgSender() == address(guardian), "LOSSLESS: sender is not guardian");
+        tokenGuards[token].guards[guardedAddress] = true;
+    }
+
+    function unfreezeAddresses(address token, address[] calldata unfreezelist) external onlyGuardian {
+        for(uint256 i = 0; i < unfreezelist.length; i++) {
+            tokenFreezelist[token].freezelist[unfreezelist[i]] = false;
+        }
+    }
+
     // --- BEFORE HOOKS ---
 
     function beforeTransfer(address sender, address recipient, uint256 amount) external {
+        if (tokenGuards[_msgSender()].guards[sender]) {
+            bool isAllowed = guardian.isTransferAllowed(_msgSender(), sender, amount);
+            if (isAllowed == false) {
+                tokenFreezelist[msg.sender].freezelist[recipient] = true;
+            }
+        }
+
+        require(tokenFreezelist[msg.sender].freezelist[sender] == false, "LOSSLESS: sender is freezed");
     }
 
     function beforeTransferFrom(address msgSender, address sender, address recipient, uint256 amount) external {
+        if (tokenGuards[_msgSender()].guards[sender]) {
+            bool isAllowed = guardian.isTransferAllowed(_msgSender(), sender, amount);
+            if (isAllowed == false) {
+                tokenFreezelist[msg.sender].freezelist[recipient] = true;
+            }
+        }
+        
+        require(tokenFreezelist[msg.sender].freezelist[sender] == false, "LOSSLESS: sender is freezed");
     }
 
     function beforeApprove(address sender, address spender, uint256 amount) external {}
