@@ -18,6 +18,12 @@ interface LERC20 {
     function approve(address spender, uint256 amount) external returns (bool);
 
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+
+    function getAdmin() external returns (address);
+}
+
+interface ILosslessGuardian {
+    function isTransferAllowed(address token, address sender, uint256 amount) external view returns (bool);
 }
 
 contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgradeable {
@@ -25,29 +31,7 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     address public admin;
     address public recoveryAdmin;
 
-    uint256 public reportLifetime;
-    uint256 public reportCount;
-    uint256 public stakeAmount;
-    LERC20 public losslessToken;
-
-    // FIX
-    struct TokenReports {
-        mapping(address => uint256) reports;
-    }
-
-    struct Stake {
-        uint256 reportId;
-        uint256 timestamp;
-    }
-
-    mapping(uint256 => address) public reporter;
-    mapping(address => TokenReports) tokenReports;
-    mapping(uint256 => uint256) public reportTimestamps;
-    mapping(uint256 => address) public reportTokens;
-    mapping(uint256 => bool) public anotherReports;
-
-    mapping(address => Stake[]) public stakes;
-    mapping(uint256 => address[]) public stakers;
+    ILosslessGuardian public guardian;
 
     event AdminChanged(address indexed previousAdmin, address indexed newAdmin);
     event RecoveryAdminChanged(address indexed previousAdmin, address indexed newAdmin);
@@ -56,6 +40,8 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     event ReportSubmitted(address indexed token, address indexed account, uint256 reportId);
     event AnotherReportSubmitted(address indexed token, address indexed account, uint256 reportId);
     event Staked(address indexed token, address indexed account, uint256 reportId);
+    event GuardianSet(address indexed oldGuardian, address indexed newGuardian);
+
     // --- MODIFIERS ---
 
     modifier onlyLosslessRecoveryAdmin() {
@@ -95,17 +81,11 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
         pauseAdmin = newPauseAdmin;
     }
 
-    function setReportLifetime(uint256 _reportLifetime) public onlyLosslessAdmin {
-        reportLifetime = _reportLifetime;
-    }
+    function setGuardian(address newGuardian) public onlyLosslessAdmin {
+        emit GuardianSet(address(guardian), newGuardian);
+        guardian = ILosslessGuardian(newGuardian);
+    }   
 
-    function setLosslessToken(address _losslessToken) public onlyLosslessAdmin {
-        losslessToken = LERC20(_losslessToken);
-    }
-
-    function setStakeAmount(uint256 _stakeAmount) public onlyLosslessAdmin {
-        stakeAmount = _stakeAmount;
-    }
 
     // --- GETTERS ---
 
@@ -113,88 +93,14 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
         return 2;
     }
 
-    // GET STAKE INFO
-
-    function getAccountStakes(address account) public view returns(Stake[] memory) {
-        return stakes[account];
-    }
-
-    function getReportStakes(uint256 reportId) public view returns(address[] memory) {
-        return stakers[reportId];
-    }
-
-    function getIsAccountStaked(uint256 reportId, address account) public view returns(bool) {
-        for(uint256 i = 0; i < stakes[account].length; i++) {
-            if (stakes[account][i].reportId == reportId) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    // --- REPORTS ---
-
-    function report(address token, address account) public {
-        uint256 reportId = tokenReports[token].reports[account];
-        uint256 reportTimestamp = reportTimestamps[reportId];
-        require(reportId == 0 || reportTimestamp + reportLifetime < block.timestamp, "LOSSLESS: report already exists");
-
-        reportCount = reportCount + 1;
-        reportId = reportCount;
-        reporter[reportId] = _msgSender();
-        // Bellow does not allow freezing more than one wallet. Do we want that?
-        tokenReports[token].reports[account] = reportId;
-        reportTimestamps[reportId] = block.timestamp;
-        reportTokens[reportId] = token;
-
-        losslessToken.transferFrom(_msgSender(), address(this), stakeAmount);
-
-        emit ReportSubmitted(token, account, reportId);
-    }
-
-    function reportAnother(uint256 reportId, address token, address account) public {
-        uint256 reportTimestamp = reportTimestamps[reportId];
-        require(reportId > 0 && reportTimestamp + reportLifetime > block.timestamp, "LOSSLESS: report does not exists");
-        require(anotherReports[reportId] == false, "LOSSLESS: another report already submitted");
-        require(_msgSender() == reporter[reportId], "LOSSLESS: invalid reporter");
-
-        anotherReports[reportId] = true;
-        tokenReports[token].reports[account] = reportId;
-
-        emit AnotherReportSubmitted(token, account, reportId);
-    }
-
-    function stake(uint256 reportId) public {        
-        require(!getIsAccountStaked(reportId, _msgSender()), "LOSSLESS: already staked");
-        require(reporter[reportId] != _msgSender(), "LOSSLESS: reporter can not stake");
-        uint256 reportTimestamp = reportTimestamps[reportId];
-        require(reportId > 0 && reportTimestamp + reportLifetime > block.timestamp, "LOSSLESS: report does not exists");
-
-        stakers[reportId].push(_msgSender());
-        stakes[_msgSender()].push(Stake(reportId, block.timestamp));
-        losslessToken.transferFrom(_msgSender(), address(this), stakeAmount);
-        
-        emit Staked(reportTokens[reportId], _msgSender(), reportId);
-    }
-
+    // GUARDS ADMINISTRATION
 
     // --- BEFORE HOOKS ---
 
     function beforeTransfer(address sender, address recipient, uint256 amount) external {
-        uint256 reportId = tokenReports[_msgSender()].reports[sender];
-        uint256 reportTimestamp = reportTimestamps[reportId];
-        require(reportId == 0 || reportTimestamp + reportLifetime < block.timestamp, "LOSSLESS: address is temporarily flagged");
     }
 
     function beforeTransferFrom(address msgSender, address sender, address recipient, uint256 amount) external {
-        uint256 reportId = tokenReports[_msgSender()].reports[sender];
-        uint256 reportTimestamp = reportTimestamps[reportId];
-        require(reportId == 0 || reportTimestamp + reportLifetime < block.timestamp, "LOSSLESS: address is temporarily flagged");
-
-        uint256 msgSenderReportId = tokenReports[_msgSender()].reports[msgSender];
-        uint256 msgSenderReportTimestamp = reportTimestamps[msgSenderReportId];
-        require(msgSenderReportId == 0 || msgSenderReportTimestamp + reportLifetime < block.timestamp, "LOSSLESS: address is temporarily flagged");
     }
 
     function beforeApprove(address sender, address spender, uint256 amount) external {}
