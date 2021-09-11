@@ -196,7 +196,7 @@ describe.only('LosslessGuardian', () => {
     });
   });
 
-  describe.only('LERC20.transfer', () => {
+  describe('LERC20.transfer', () => {
     beforeEach(async () => {
       await guardian
         .connect(admin)
@@ -227,6 +227,51 @@ describe.only('LosslessGuardian', () => {
         await expect(
           erc20.connect(recipient).transfer(anotherAccount.address, 10),
         ).to.be.revertedWith('LOSSLESS: sender is freezed');
+      });
+    });
+  });
+
+  describe.only('unfreeze', () => {
+    beforeEach(async () => {
+      await guardian
+        .connect(admin)
+        .setGuardAdmin(erc20.address, guardianAdmin.address);
+
+      await losslessController.connect(lssAdmin).setGuardian(guardian.address);
+
+      await guardian
+        .connect(guardianAdmin)
+        .setGuardedList(
+          erc20.address,
+          [oneMoreAccount.address, initialHolder.address],
+          [10, 100],
+        );
+
+      await erc20.connect(initialHolder).transfer(recipient.address, 101);
+    });
+
+    describe('when sender is not guard admin', () => {
+      it('should revert', async () => {
+        await expect(
+          guardian
+            .connect(anotherAccount)
+            .unfreeze(erc20.address, [recipient.address]),
+        ).to.be.revertedWith('LOSSLESS: unauthorized');
+      });
+    });
+
+    describe('when sender is guard admin', () => {
+      it('should revert', async () => {
+        await guardian
+          .connect(guardianAdmin)
+          .unfreeze(erc20.address, [initialHolder.address]);
+
+        await guardian
+          .connect(guardianAdmin)
+          .unfreeze(erc20.address, [recipient.address]);
+
+        await erc20.connect(recipient).transfer(anotherAccount.address, 10);
+        expect(await erc20.balanceOf(anotherAccount.address)).to.be.equal(10);
       });
     });
   });

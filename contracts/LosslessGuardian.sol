@@ -19,6 +19,8 @@ interface LERC20 {
 
 interface ILosslessController {
     function setGuardedAddress(address token, address guardedAddress) external;
+
+    function unfreezeAddresses(address token, address[] calldata unfreezelist) external;
 }
 
 contract LosslessGuardian {
@@ -69,9 +71,10 @@ contract LosslessGuardian {
         return true;
     }
 
-    // function unfreeze(address token, address[] calldata unfreezelist) {
-
-    // }
+    function unfreeze(address token, address[] calldata unfreezelist) public {
+        require(guardAdmins[token] == msg.sender, "LOSSLESS: unauthorized");
+        lossless.unfreezeAddresses(token, unfreezelist);
+    }
 
     // TODO: unfreeze
     // TODO: refund
