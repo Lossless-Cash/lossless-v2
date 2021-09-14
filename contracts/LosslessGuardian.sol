@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "hardhat/console.sol";
+
 interface LERC20 {
     function totalSupply() external view returns (uint256);
 
@@ -18,25 +20,27 @@ interface LERC20 {
 }
 
 interface ILosslessController {
-    function setGuardedAddress(address token, address guardedAddress) external;
+    function setGuardedAddress(address token, address guardedAddress, address strategy) external;
 
     function unfreezeAddresses(address token, address[] calldata unfreezelist) external;
+
+    function admin() external returns(address);
+
+    function getIsAddressFreezed(address token, address freezedAddress) external view returns (bool);
+
+    function refund(address token, address freezedAddress, address refundAddress) external;
+}
+
+interface IStrategy {
+    function setGuardedAddress(address token, address guardedAddress, uint256 threshold) external;
 }
 
 contract LosslessGuardian {
-    struct Guard {
-        bool isTurnedOn;
-        uint256 threshold;
-    }
-
-    struct AddressGuard {
-        mapping(address => Guard) guards; 
-    }
-
     mapping(address => address) public guardAdmins;
-    mapping(address => AddressGuard) private tokenGuards;
-
-    ILosslessController public lossless; 
+    mapping(address => address) public refundAdmins;
+    mapping(bytes32 => uint256) public refundTimestamps;
+    ILosslessController public lossless;
+    uint256 public timelockPeriod = 86400;
 
     constructor(address _lossless) {
         lossless = ILosslessController(_lossless);
@@ -47,38 +51,64 @@ contract LosslessGuardian {
         _;
     }
 
-    function setGuardAdmin(address token, address guardAdmin) public {
+    modifier onlyRefundAdmin(address token) {
+        require(msg.sender == refundAdmins[token], "LOSSLESS: unauthorized");
+        _;
+    }
+
+    function setAdmins(address token, address guardAdmin, address refundAdmin) public {
         require(LERC20(token).getAdmin() == msg.sender, "LOSSLESS: unauthorized");
         guardAdmins[token] = guardAdmin;
+        refundAdmins[token] = refundAdmin;
     }
 
-    function setGuardedList(address token, address[] calldata guardlistAddition, uint256[] calldata thresholdlist) public onlyGuardAdmin(token) {
-        require(guardAdmins[token] == msg.sender, "LOSSLESS: unauthorized");
+    // TODO: set a list of verified strategies;
 
+    function setGuardedList(address token, address[] calldata guardlistAddition, uint256[] calldata thresholdlist, address[] calldata strategies) public onlyGuardAdmin(token) {
         for(uint8 i = 0; i < guardlistAddition.length; i++) {
-            Guard storage guard = tokenGuards[token].guards[guardlistAddition[i]];
-            guard.isTurnedOn = true;
-            guard.threshold = thresholdlist[i];
-            lossless.setGuardedAddress(token, guardlistAddition[i]);
+            IStrategy(strategies[i]).setGuardedAddress(token, guardlistAddition[i], thresholdlist[i]);
+            lossless.setGuardedAddress(token, guardlistAddition[i], strategies[i]);
         }
     }
 
-    function isTransferAllowed(address token, address sender, uint256 amount) external view returns  (bool) {
-        if(tokenGuards[token].guards[sender].isTurnedOn && tokenGuards[token].guards[sender].threshold <= amount) {
-            return false;
-        }
-
-        return true;
+    function setTimelockPeriod(uint256 newTimelockPeriod) public {
+        require(msg.sender == lossless.admin(), "LOSSLESS: unauthorized");
+        timelockPeriod = newTimelockPeriod;
     }
 
-    function unfreeze(address token, address[] calldata unfreezelist) public {
-        require(guardAdmins[token] == msg.sender, "LOSSLESS: unauthorized");
+    function hashOperation(
+        address token,
+        address freezedAddress,
+        address refundAddress,
+        bytes32 salt
+    ) public pure virtual returns (bytes32 hash) {
+        return keccak256(abi.encode(token, freezedAddress, refundAddress, salt));
+    }
+
+    function unfreeze(address token, address[] calldata unfreezelist) public onlyGuardAdmin(token) {
         lossless.unfreezeAddresses(token, unfreezelist);
     }
 
-    // TODO: unfreeze
-    // TODO: refund
-    // TODO: cummulativeThreshold
+    function proposeRefund(address token, address freezedAddress, address refundAddress, bytes32 salt) public onlyRefundAdmin(token) {
+        bytes32 id = hashOperation(token, freezedAddress, refundAddress, salt);
+        require(refundTimestamps[id] == 0, "LOSSLESS: refund already proposed");
+        require(lossless.getIsAddressFreezed(token, freezedAddress), "LOSSLESS: address is not freezed");
 
+        refundTimestamps[id] = block.timestamp + timelockPeriod;
+    }
 
+    function cancelRefundProposal(address token, address freezedAddress, address refundAddress, bytes32 salt) public onlyRefundAdmin(token) {
+        bytes32 id = hashOperation(token, freezedAddress, refundAddress, salt);
+        require(refundTimestamps[id] != 0, "LOSSLESS: refund does not exist");
+
+        refundTimestamps[id] = 0;
+    }
+
+    function executeRefund(address token, address freezedAddress, address refundAddress, bytes32 salt) public onlyRefundAdmin(token) {
+        bytes32 id = hashOperation(token, freezedAddress, refundAddress, salt);
+        require(refundTimestamps[id] != 0, "LOSSLESS: refund does not exist");
+
+        refundTimestamps[id] = 0;
+        lossless.refund(token, freezedAddress, refundAddress);
+    }
 }
