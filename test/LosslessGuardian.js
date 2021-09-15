@@ -196,12 +196,19 @@ describe.only('LosslessGuardian', () => {
         .setAdmins(erc20.address, guardianAdmin.address, refundAdmin.address);
 
       await losslessController.connect(lssAdmin).setGuardian(guardian.address);
+
+      await guardian
+        .connect(lssAdmin)
+        .verifyStrategies([
+          treasuryProtectionStrategy.address,
+          liquidityProtectionStrategy.address,
+        ]);
     });
 
     describe('when sender is not guard admin', () => {
       it('should revert', async () => {
         await expect(
-          guardian
+          treasuryProtectionStrategy
             .connect(anotherAccount)
             .setGuardedList(
               erc20.address,
@@ -218,7 +225,7 @@ describe.only('LosslessGuardian', () => {
 
     describe('when sender is guard admin', () => {
       it('should succeed', async () => {
-        await guardian
+        await treasuryProtectionStrategy
           .connect(guardianAdmin)
           .setGuardedList(
             erc20.address,
@@ -242,6 +249,13 @@ describe.only('LosslessGuardian', () => {
       await losslessController.connect(lssAdmin).setGuardian(guardian.address);
 
       await guardian
+        .connect(lssAdmin)
+        .verifyStrategies([
+          treasuryProtectionStrategy.address,
+          liquidityProtectionStrategy.address,
+        ]);
+
+      await treasuryProtectionStrategy
         .connect(guardianAdmin)
         .setGuardedList(
           erc20.address,
@@ -309,6 +323,13 @@ describe.only('LosslessGuardian', () => {
       await losslessController.connect(lssAdmin).setGuardian(guardian.address);
 
       await guardian
+        .connect(lssAdmin)
+        .verifyStrategies([
+          treasuryProtectionStrategy.address,
+          liquidityProtectionStrategy.address,
+        ]);
+
+      await treasuryProtectionStrategy
         .connect(guardianAdmin)
         .setGuardedList(
           erc20.address,
@@ -411,6 +432,13 @@ describe.only('LosslessGuardian', () => {
       await losslessController.connect(lssAdmin).setGuardian(guardian.address);
 
       await guardian
+        .connect(lssAdmin)
+        .verifyStrategies([
+          treasuryProtectionStrategy.address,
+          liquidityProtectionStrategy.address,
+        ]);
+
+      await treasuryProtectionStrategy
         .connect(guardianAdmin)
         .setGuardedList(
           erc20.address,
@@ -498,6 +526,13 @@ describe.only('LosslessGuardian', () => {
       await losslessController.connect(lssAdmin).setGuardian(guardian.address);
 
       await guardian
+        .connect(lssAdmin)
+        .verifyStrategies([
+          treasuryProtectionStrategy.address,
+          liquidityProtectionStrategy.address,
+        ]);
+
+      await treasuryProtectionStrategy
         .connect(guardianAdmin)
         .setGuardedList(
           erc20.address,
@@ -579,7 +614,7 @@ describe.only('LosslessGuardian', () => {
     });
   });
 
-  describe('addLimitToGuard', () => {
+  describe('addLimitsToGuard', () => {
     beforeEach(async () => {
       await guardian
         .connect(admin)
@@ -588,6 +623,13 @@ describe.only('LosslessGuardian', () => {
       await losslessController.connect(lssAdmin).setGuardian(guardian.address);
 
       await guardian
+        .connect(lssAdmin)
+        .verifyStrategies([
+          treasuryProtectionStrategy.address,
+          liquidityProtectionStrategy.address,
+        ]);
+
+      await treasuryProtectionStrategy
         .connect(guardianAdmin)
         .setGuardedList(
           erc20.address,
@@ -605,45 +647,13 @@ describe.only('LosslessGuardian', () => {
         await expect(
           liquidityProtectionStrategy
             .connect(anotherAccount)
-            .addLimitToGuard(
+            .addLimitsToGuard(
               erc20.address,
               [oneMoreAccount.address, initialHolder.address],
               [100, 300],
               [10, 25],
             ),
         ).to.be.revertedWith('LOSSLESS: unauthorized');
-      });
-    });
-
-    describe('when sender is guard admin', () => {
-      describe('when guardlist contains unguarded address', () => {
-        it('should revert', async () => {
-          await expect(
-            liquidityProtectionStrategy
-              .connect(guardianAdmin)
-              .addLimitToGuard(
-                erc20.address,
-                [
-                  oneMoreAccount.address,
-                  initialHolder.address,
-                  recipient.address,
-                ],
-                [100, 300],
-                [10, 25],
-              ),
-          ).to.be.revertedWith('LOSSLESS: address is not guarded');
-        });
-
-        it('should succeed', async () => {
-          await liquidityProtectionStrategy
-            .connect(guardianAdmin)
-            .addLimitToGuard(
-              erc20.address,
-              [oneMoreAccount.address, initialHolder.address],
-              [100, 300],
-              [10, 25],
-            );
-        });
       });
     });
   });
@@ -660,6 +670,13 @@ describe.only('LosslessGuardian', () => {
           .setGuardian(guardian.address);
 
         await guardian
+          .connect(lssAdmin)
+          .verifyStrategies([
+            treasuryProtectionStrategy.address,
+            liquidityProtectionStrategy.address,
+          ]);
+
+        await treasuryProtectionStrategy
           .connect(guardianAdmin)
           .setGuardedList(
             erc20.address,
@@ -713,6 +730,13 @@ describe.only('LosslessGuardian', () => {
           .setGuardian(guardian.address);
 
         await guardian
+          .connect(lssAdmin)
+          .verifyStrategies([
+            treasuryProtectionStrategy.address,
+            liquidityProtectionStrategy.address,
+          ]);
+
+        await treasuryProtectionStrategy
           .connect(guardianAdmin)
           .setGuardedList(
             erc20.address,
@@ -726,7 +750,7 @@ describe.only('LosslessGuardian', () => {
 
         await liquidityProtectionStrategy
           .connect(guardianAdmin)
-          .addLimitToGuard(
+          .addLimitsToGuard(
             erc20.address,
             [oneMoreAccount.address, initialHolder.address],
             [5, 10],
@@ -865,6 +889,270 @@ describe.only('LosslessGuardian', () => {
             erc20.connect(recipient).transfer(anotherAccount.address, 1),
           ).to.be.revertedWith('LOSSLESS: sender is freezed');
         });
+      });
+    });
+  });
+
+  describe('verifyStrategies', () => {
+    describe('when sender is not lossless admin', () => {
+      it('should revert', async () => {
+        await expect(
+          guardian
+            .connect(guardianAdmin)
+            .verifyStrategies([
+              treasuryProtectionStrategy.address,
+              liquidityProtectionStrategy.address,
+            ]),
+        ).to.be.revertedWith('LOSSLESS: unauthorized');
+      });
+    });
+
+    describe('when sender is lossless admin', () => {
+      it('should succedd', async () => {
+        await guardian
+          .connect(lssAdmin)
+          .verifyStrategies([
+            treasuryProtectionStrategy.address,
+            liquidityProtectionStrategy.address,
+          ]);
+
+        expect(
+          await guardian.verifiedStrategies(treasuryProtectionStrategy.address),
+        ).to.be.equal(true);
+        expect(
+          await guardian.verifiedStrategies(
+            liquidityProtectionStrategy.address,
+          ),
+        ).to.be.equal(true);
+      });
+
+      describe('when sending empty array', () => {
+        it('should succedd', async () => {
+          await guardian.connect(lssAdmin).verifyStrategies([]);
+
+          expect(
+            await guardian.verifiedStrategies(
+              treasuryProtectionStrategy.address,
+            ),
+          ).to.be.equal(false);
+          expect(
+            await guardian.verifiedStrategies(
+              liquidityProtectionStrategy.address,
+              [],
+            ),
+          ).to.be.equal(false);
+        });
+      });
+    });
+  });
+
+  describe('removeStrategies', () => {
+    beforeEach(async () => {
+      await guardian
+        .connect(lssAdmin)
+        .verifyStrategies([
+          treasuryProtectionStrategy.address,
+          liquidityProtectionStrategy.address,
+        ]);
+    });
+
+    describe('when sender is not lossless admin', () => {
+      it('should revert', async () => {
+        await expect(
+          guardian
+            .connect(guardianAdmin)
+            .removeStrategies([
+              treasuryProtectionStrategy.address,
+              liquidityProtectionStrategy.address,
+            ]),
+        ).to.be.revertedWith('LOSSLESS: unauthorized');
+      });
+    });
+
+    describe('when sender is lossless admin', () => {
+      it('should succedd', async () => {
+        await guardian
+          .connect(lssAdmin)
+          .removeStrategies([
+            treasuryProtectionStrategy.address,
+            liquidityProtectionStrategy.address,
+          ]);
+
+        expect(
+          await guardian.verifiedStrategies(treasuryProtectionStrategy.address),
+        ).to.be.equal(false);
+        expect(
+          await guardian.verifiedStrategies(
+            liquidityProtectionStrategy.address,
+          ),
+        ).to.be.equal(false);
+      });
+
+      describe('when sending empty array', () => {
+        it('should succedd', async () => {
+          await guardian.connect(lssAdmin).removeStrategies([]);
+
+          expect(
+            await guardian.verifiedStrategies(
+              treasuryProtectionStrategy.address,
+            ),
+          ).to.be.equal(true);
+          expect(
+            await guardian.verifiedStrategies(
+              liquidityProtectionStrategy.address,
+              [],
+            ),
+          ).to.be.equal(true);
+        });
+      });
+    });
+  });
+
+  describe('setGuardian', () => {
+    describe('when sender is not lossless admin', () => {
+      it('should revert in treasuryProtectionStrategy', async () => {
+        await expect(
+          treasuryProtectionStrategy
+            .connect(anotherAccount)
+            .setGuardian(anotherAccount.address),
+        ).to.be.revertedWith('LOSSLESS: unauthorized');
+      });
+
+      it('should revert in liquidityProtectionStrategy', async () => {
+        await expect(
+          liquidityProtectionStrategy
+            .connect(anotherAccount)
+            .setGuardian(anotherAccount.address),
+        ).to.be.revertedWith('LOSSLESS: unauthorized');
+      });
+    });
+
+    describe('when sender is lossless admin', () => {
+      it('should succeed in treasuryProtectionStrategy', async () => {
+        await treasuryProtectionStrategy
+          .connect(lssAdmin)
+          .setGuardian(anotherAccount.address);
+
+        expect(await treasuryProtectionStrategy.guardian()).to.be.equal(
+          anotherAccount.address,
+        );
+      });
+
+      it('should succeed in liquidityProtectionStrategy', async () => {
+        await liquidityProtectionStrategy
+          .connect(lssAdmin)
+          .setGuardian(anotherAccount.address);
+
+        expect(await liquidityProtectionStrategy.guardian()).to.be.equal(
+          anotherAccount.address,
+        );
+      });
+    });
+  });
+
+  describe('LiquidityProtectionStrategy.removeLimits', () => {
+    beforeEach(async () => {
+      await guardian
+        .connect(admin)
+        .setAdmins(erc20.address, guardianAdmin.address, refundAdmin.address);
+
+      await losslessController.connect(lssAdmin).setGuardian(guardian.address);
+
+      await guardian
+        .connect(lssAdmin)
+        .verifyStrategies([liquidityProtectionStrategy.address]);
+
+      await liquidityProtectionStrategy
+        .connect(guardianAdmin)
+        .addLimitsToGuard(
+          erc20.address,
+          [oneMoreAccount.address, initialHolder.address],
+          [5, 10],
+          [10, 15],
+        );
+    });
+
+    describe('when sender is not admin', () => {
+      it('should revert', async () => {
+        await expect(
+          liquidityProtectionStrategy
+            .connect(anotherAccount)
+            .removeLimits(erc20.address, [
+              oneMoreAccount.address,
+              initialHolder.address,
+            ]),
+        ).to.be.revertedWith('LOSSLESS: unauthorized');
+      });
+    });
+
+    describe('when sender is admin', () => {
+      it('should succeed', async () => {
+        await liquidityProtectionStrategy
+          .connect(guardianAdmin)
+          .removeLimits(erc20.address, [
+            oneMoreAccount.address,
+            initialHolder.address,
+          ]);
+
+        await erc20.connect(initialHolder).transfer(recipient.address, 100);
+        await erc20.connect(recipient).transfer(anotherAccount.address, 100);
+        expect(await erc20.balanceOf(anotherAccount.address)).to.be.equal(100);
+      });
+    });
+  });
+
+  describe('TreasuryProtectionStrategy.removeGuards', () => {
+    beforeEach(async () => {
+      await guardian
+        .connect(admin)
+        .setAdmins(erc20.address, guardianAdmin.address, refundAdmin.address);
+
+      await losslessController.connect(lssAdmin).setGuardian(guardian.address);
+
+      await guardian
+        .connect(lssAdmin)
+        .verifyStrategies([treasuryProtectionStrategy.address]);
+
+      await treasuryProtectionStrategy
+        .connect(guardianAdmin)
+        .setGuardedList(
+          erc20.address,
+          [oneMoreAccount.address, initialHolder.address],
+          [10000, 10000],
+          [
+            treasuryProtectionStrategy.address,
+            treasuryProtectionStrategy.address,
+          ],
+        );
+    });
+
+    describe('when sender is not admin', () => {
+      it('should revert', async () => {
+        await expect(
+          treasuryProtectionStrategy
+            .connect(anotherAccount)
+            .removeGuards(erc20.address, [
+              oneMoreAccount.address,
+              initialHolder.address,
+            ]),
+        ).to.be.revertedWith('LOSSLESS: unauthorized');
+      });
+    });
+
+    describe('when sender is admin', () => {
+      it('should succeed', async () => {
+        await treasuryProtectionStrategy
+          .connect(guardianAdmin)
+          .removeGuards(erc20.address, [
+            oneMoreAccount.address,
+            initialHolder.address,
+          ]);
+
+        await erc20.connect(initialHolder).transfer(recipient.address, 10001);
+        await erc20.connect(recipient).transfer(anotherAccount.address, 10001);
+        expect(await erc20.balanceOf(anotherAccount.address)).to.be.equal(
+          10001,
+        );
       });
     });
   });

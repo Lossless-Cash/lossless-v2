@@ -33,6 +33,8 @@ interface ILosslessController {
 
 interface IGuardian {
     function guardAdmins(address token) external returns (address);
+
+    function setGuardedAddress(address token, address guardedAddress, address strategy) external;
 }
 
 contract LiquidityProtectionStrategy {
@@ -44,13 +46,8 @@ contract LiquidityProtectionStrategy {
         uint256 lastCheckpoint;
     }
 
-    struct Guard {
-        bool isTurnedOn;
-        Limit[] limits;
-    }
-
     struct AddressGuard {
-        mapping(address => Guard) guards; 
+        mapping(address => Limit[]) limits; 
     }
 
     mapping(address => address) public guardAdmins;
@@ -71,19 +68,17 @@ contract LiquidityProtectionStrategy {
         _;
     }
 
-    // TODO: set guardian
-
-    function setGuardedAddress(address token, address guardedAddress, uint256 threshold) external onlyGuardian {
-        Guard storage guard = tokenGuards[token].guards[guardedAddress];
-        guard.isTurnedOn = true;
+    function setGuardian(address newGuardian) public {
+        require(msg.sender == lossless.admin(), "LOSSLESS: unauthorized");
+        guardian = newGuardian;
     }
 
-    function addLimitToGuard(address token, address[] calldata guardlist, uint256[] calldata periodsInBlocks, uint256[] calldata amountsPerPeriod) public {
+    function addLimitsToGuard(address token, address[] calldata guardlist, uint256[] calldata periodsInBlocks, uint256[] calldata amountsPerPeriod) public {
         require(msg.sender == IGuardian(guardian).guardAdmins(token), "LOSSLESS: unauthorized");
         
         for(uint8 i = 0; i < guardlist.length; i++) {
-            Guard storage guard = tokenGuards[token].guards[guardlist[i]];
-            require(guard.isTurnedOn, "LOSSLESS: address is not guarded");
+            Limit[] storage limits = tokenGuards[token].limits[guardlist[i]];
+            IGuardian(guardian).setGuardedAddress(token, guardlist[i], address(this));
 
             for(uint8 j = 0; j < periodsInBlocks.length; j ++) {
                 Limit memory limit;
@@ -91,21 +86,26 @@ contract LiquidityProtectionStrategy {
                 limit.amountPerPeriod = amountsPerPeriod[j];
                 limit.lastCheckpoint = block.timestamp;
                 limit.leftAmount = int256(amountsPerPeriod[j]);
-                guard.limits.push(limit);
+                limits.push(limit);
             }
+        }
+    }
+
+    function removeLimits(address token, address[] calldata guardlist) public {
+        require(msg.sender == IGuardian(guardian).guardAdmins(token), "LOSSLESS: unauthorized");
+
+        for(uint8 i = 0; i < guardlist.length; i++) {
+            delete tokenGuards[token].limits[guardlist[i]];
         }
     }
 
     function isTransferAllowed(address token, address sender, uint256 amount) external returns (bool) {
         require(msg.sender == address(lossless), "LOSSLESS: unauthorized");
-        Guard storage guard = tokenGuards[token].guards[sender];
-        if (!guard.isTurnedOn) {
-            return true;
-        }
+        Limit[] storage limits = tokenGuards[token].limits[sender];
 
         // Time period based limits checks
-        for(uint256 i = 0; i < guard.limits.length; i++) {
-            Limit storage limit = guard.limits[i];
+        for(uint256 i = 0; i < limits.length; i++) {
+            Limit storage limit = limits[i];
 
             // Are still in the same period ?
             if (limit.lastCheckpoint + limit.periodInBlocks > block.timestamp) {

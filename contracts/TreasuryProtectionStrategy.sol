@@ -20,7 +20,7 @@ interface LERC20 {
 }
 
 interface ILosslessController {
-    function setGuardedAddress(address token, address guardedAddress) external;
+    function setGuardedAddress(address token, address guardedAddress, address strategy) external;
 
     function unfreezeAddresses(address token, address[] calldata unfreezelist) external;
 
@@ -33,6 +33,8 @@ interface ILosslessController {
 
 interface IGuardian {
     function guardAdmins(address token) external returns (address);
+
+    function setGuardedAddress(address token, address guardedAddress, address strategy) external;
 }
 
 contract TreasuryProtectionStrategy {
@@ -63,12 +65,30 @@ contract TreasuryProtectionStrategy {
         _;
     }
 
-    // TODO: set guardian
+    function setGuardian(address newGuardian) public {
+        require(msg.sender == lossless.admin(), "LOSSLESS: unauthorized");
+        guardian = newGuardian;
+    }
 
-    function setGuardedAddress(address token, address guardedAddress, uint256 threshold) external onlyGuardian {
-        Guard storage guard = tokenGuards[token].guards[guardedAddress];
-        guard.isTurnedOn = true;
-        guard.threshold = threshold;
+    function setGuardedList(address token, address[] calldata guardlistAddition, uint256[] calldata thresholdlist, address[] calldata strategies) public {
+        require(msg.sender == IGuardian(guardian).guardAdmins(token), "LOSSLESS: unauthorized");
+        
+        for(uint8 i = 0; i < guardlistAddition.length; i++) {
+            Guard storage guard = tokenGuards[token].guards[guardlistAddition[i]];
+            guard.isTurnedOn = true;
+            guard.threshold = thresholdlist[i];
+            IGuardian(guardian).setGuardedAddress(token, guardlistAddition[i], strategies[i]);
+        }
+    }
+
+    function removeGuards(address token, address[] calldata guardlistAddition) public {
+        require(msg.sender == IGuardian(guardian).guardAdmins(token), "LOSSLESS: unauthorized");
+        
+        for(uint8 i = 0; i < guardlistAddition.length; i++) {
+            Guard storage guard = tokenGuards[token].guards[guardlistAddition[i]];
+            guard.isTurnedOn = false;
+            guard.threshold = 0;
+        }
     }
 
     function isTransferAllowed(address token, address sender, uint256 amount) external view returns (bool) {

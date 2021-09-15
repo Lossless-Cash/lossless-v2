@@ -39,6 +39,7 @@ contract LosslessGuardian {
     mapping(address => address) public guardAdmins;
     mapping(address => address) public refundAdmins;
     mapping(bytes32 => uint256) public refundTimestamps;
+    mapping(address => bool) public verifiedStrategies;
     ILosslessController public lossless;
     uint256 public timelockPeriod = 86400;
 
@@ -63,17 +64,30 @@ contract LosslessGuardian {
     }
 
     // TODO: set a list of verified strategies;
+    function verifyStrategies(address[] calldata strategies) public {
+        require(msg.sender == lossless.admin(),"LOSSLESS: unauthorized");
 
-    function setGuardedList(address token, address[] calldata guardlistAddition, uint256[] calldata thresholdlist, address[] calldata strategies) public onlyGuardAdmin(token) {
-        for(uint8 i = 0; i < guardlistAddition.length; i++) {
-            IStrategy(strategies[i]).setGuardedAddress(token, guardlistAddition[i], thresholdlist[i]);
-            lossless.setGuardedAddress(token, guardlistAddition[i], strategies[i]);
+        for(uint8 i = 0; i < strategies.length; i++) {
+            verifiedStrategies[strategies[i]] = true;
+        }
+    }
+
+    function removeStrategies(address[] calldata strategies) public {
+        require(msg.sender == lossless.admin(),"LOSSLESS: unauthorized");
+
+        for(uint8 i = 0; i < strategies.length; i++) {
+            verifiedStrategies[strategies[i]] = false;
         }
     }
 
     function setTimelockPeriod(uint256 newTimelockPeriod) public {
         require(msg.sender == lossless.admin(), "LOSSLESS: unauthorized");
         timelockPeriod = newTimelockPeriod;
+    }
+
+    function setGuardedAddress(address token, address guardedAddress, address strategy) external {
+        require(verifiedStrategies[msg.sender], "LOSSLESS: unauthorized");
+        lossless.setGuardedAddress(token, guardedAddress, strategy);
     }
 
     function hashOperation(
