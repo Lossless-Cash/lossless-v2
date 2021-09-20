@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 
 import "hardhat/console.sol";
 
@@ -20,89 +20,68 @@ interface LERC20 {
 }
 
 interface ILosslessController {
-    function setGuardedAddress(address token, address guardedAddress, address strategy) external;
-
-    function unfreezeAddresses(address token, address[] calldata unfreezelist) external;
-
     function admin() external returns(address);
-
-    function getIsAddressFreezed(address token, address freezedAddress) external view returns (bool);
-
-    function refund(address token, address freezedAddress, address refundAddress) external;
 }
 
 interface IGuardian {
-    function guardAdmins(address token) external returns (address);
+    function protectionAdmin(address token) external returns (address);
 
-    function setGuardedAddress(address token, address guardedAddress, address strategy) external;
+    function setProtectedAddress(address token, address guardedAddress, address strategy) external;
+
+    function removeProtectedAddresses(address token, address protectedAddress) external;
 }
 
+error NotAllowed(address sender, uint256 amount);
+
 contract TreasuryProtectionStrategy {
-    struct Guard {
-        bool isTurnedOn;
-        uint256 threshold;
+    struct Whitelist {
+        mapping(address => bool) whitelist;
     }
 
-    struct AddressGuard {
-        mapping(address => Guard) guards; 
+    struct Protection {
+        mapping(address => Whitelist) protection; 
     }
 
-    mapping(address => address) public guardAdmins;
-    mapping(address => address) public refundAdmins;
-    mapping(address => AddressGuard) private tokenGuards;
-    mapping(bytes32 => uint256) public refundTimestamps;
-    address public guardian;
+    mapping(address => Protection) private protectedAddresses;
+    IGuardian public guardian;
     ILosslessController public lossless;
-    uint256 public timelockPeriod = 86400;
 
     constructor(address _guardian, address _lossless) {
-        guardian = _guardian;
+        guardian = IGuardian(_guardian);
         lossless = ILosslessController(_lossless);
     }
 
     modifier onlyGuardian() {
-        require(msg.sender == guardian, "LOSSLESS: unauthorized");
+        require(msg.sender == address(guardian), "LOSSLESS: unauthorized");
+        _;
+    }
+
+    modifier onlyProtectionAdmin(address token) {
+        require(msg.sender == guardian.protectionAdmin(token), "LOSSLESS: unauthorized");
         _;
     }
 
     function setGuardian(address newGuardian) public {
         require(msg.sender == lossless.admin(), "LOSSLESS: unauthorized");
-        guardian = newGuardian;
+        guardian = IGuardian(newGuardian);
     }
 
-    function setGuardedList(address token, address[] calldata guardlistAddition, uint256[] calldata thresholdlist, address[] calldata strategies) public {
-        require(msg.sender == IGuardian(guardian).guardAdmins(token), "LOSSLESS: unauthorized");
-        
-        for(uint8 i = 0; i < guardlistAddition.length; i++) {
-            Guard storage guard = tokenGuards[token].guards[guardlistAddition[i]];
-            guard.isTurnedOn = true;
-            guard.threshold = thresholdlist[i];
-            IGuardian(guardian).setGuardedAddress(token, guardlistAddition[i], strategies[i]);
+    function setProtectedAddress(address token, address protectedAddress, address[] calldata whitelist) public onlyProtectionAdmin(token) {
+        for(uint8 i = 0; i < whitelist.length; i++) {
+            protectedAddresses[token].protection[protectedAddress].whitelist[whitelist[i]] = true;
         }
+
+        guardian.setProtectedAddress(token, protectedAddress, address(this));
     }
 
-    function removeGuards(address token, address[] calldata guardlistAddition) public {
-        require(msg.sender == IGuardian(guardian).guardAdmins(token), "LOSSLESS: unauthorized");
-        
-        for(uint8 i = 0; i < guardlistAddition.length; i++) {
-            Guard storage guard = tokenGuards[token].guards[guardlistAddition[i]];
-            guard.isTurnedOn = false;
-            guard.threshold = 0;
+    function removeProtectedAddresses(address token, address[] calldata addressesToRemove) public onlyProtectionAdmin(token) {
+        for(uint8 i = 0; i < addressesToRemove.length; i++) {
+            delete protectedAddresses[token].protection[addressesToRemove[i]];
+            guardian.removeProtectedAddresses(token, addressesToRemove[i]);
         }
     }
 
-    function isTransferAllowed(address token, address sender, uint256 amount) external view returns (bool) {
-        require(msg.sender == address(lossless), "LOSSLESS: unauthorized");
-        Guard storage guard = tokenGuards[token].guards[sender];
-        if (!guard.isTurnedOn) {
-            return true;
-        }
-
-        // Simple threshold check
-        if(guard.threshold <= amount) {
-            return false;
-        }
-
-        return true;
+    function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external view {
+        require(protectedAddresses[token].protection[sender].whitelist[recipient], "LOSSLESS: recipient not whitelisted");
     }
 }

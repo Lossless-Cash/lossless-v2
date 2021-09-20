@@ -4,128 +4,153 @@ pragma solidity ^0.8.0;
 import "hardhat/console.sol";
 
 interface LERC20 {
-    function totalSupply() external view returns (uint256);
-
-    function balanceOf(address account) external view returns (uint256);
-
-    function transfer(address recipient, uint256 amount) external returns (bool);
-
-    function allowance(address owner, address spender) external view returns (uint256);
-
-    function approve(address spender, uint256 amount) external returns (bool);
-
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
-
     function getAdmin() external returns (address);
 }
 
 interface ILosslessController {
-    function setGuardedAddress(address token, address guardedAddress) external;
-
-    function unfreezeAddresses(address token, address[] calldata unfreezelist) external;
-
     function admin() external returns(address);
 
-    function getIsAddressFreezed(address token, address freezedAddress) external view returns (bool);
-
-    function refund(address token, address freezedAddress, address refundAddress) external;
+    function isAddressProtected(address token, address protectedAddress) external view returns (bool);
 }
 
 interface IGuardian {
-    function guardAdmins(address token) external returns (address);
+    function protectionAdmin(address token) external returns (address);
 
-    function setGuardedAddress(address token, address guardedAddress, address strategy) external;
+    function setProtectedAddress(address token, address guardedAddress, address strategy) external;
 }
+
+error NotAllowed(address sender, uint256 amount);
 
 contract LiquidityProtectionStrategy {
     struct Limit {
         uint256 periodInBlocks;
         uint256 amountPerPeriod;
 
-        int256 leftAmount;
+        uint256 leftAmount;
         uint256 lastCheckpoint;
     }
 
-    struct AddressGuard {
-        mapping(address => Limit[]) limits; 
+    struct Protection {
+        mapping(address => Limit[]) limits;
     }
 
-    mapping(address => address) public guardAdmins;
-    mapping(address => address) public refundAdmins;
-    mapping(address => AddressGuard) private tokenGuards;
-    mapping(bytes32 => uint256) public refundTimestamps;
-    address public guardian;
+    mapping(address => Protection) private protection;
+    IGuardian public guardian;
     ILosslessController public lossless;
-    uint256 public timelockPeriod = 86400;
 
     constructor(address _guardian, address _lossless) {
-        guardian = _guardian;
+        guardian = IGuardian(_guardian);
         lossless = ILosslessController(_lossless);
     }
 
     modifier onlyGuardian() {
-        require(msg.sender == guardian, "LOSSLESS: unauthorized");
+        require(msg.sender == address(guardian), "LOSSLESS: unauthorized");
+        _;
+    }
+
+    modifier onlyProtectionAdmin(address token) {
+        require(msg.sender == guardian.protectionAdmin(token), "LOSSLESS: unauthorized");
         _;
     }
 
     function setGuardian(address newGuardian) public {
         require(msg.sender == lossless.admin(), "LOSSLESS: unauthorized");
-        guardian = newGuardian;
+        guardian = IGuardian(newGuardian);
     }
 
-    function addLimitsToGuard(address token, address[] calldata guardlist, uint256[] calldata periodsInBlocks, uint256[] calldata amountsPerPeriod) public {
-        require(msg.sender == IGuardian(guardian).guardAdmins(token), "LOSSLESS: unauthorized");
-        
+    function addLimitsToGuard(
+        address token,
+        address[] calldata guardlist,
+        uint256[] calldata periodsInBlocks,
+        uint256[] calldata amountsPerPeriod,
+        uint256[] calldata startblocks
+    ) public onlyProtectionAdmin(token) {
         for(uint8 i = 0; i < guardlist.length; i++) {
-            Limit[] storage limits = tokenGuards[token].limits[guardlist[i]];
-            IGuardian(guardian).setGuardedAddress(token, guardlist[i], address(this));
+            Limit[] storage limits = protection[token].limits[guardlist[i]];
+            guardian.setProtectedAddress(token, guardlist[i], address(this));
 
             for(uint8 j = 0; j < periodsInBlocks.length; j ++) {
                 Limit memory limit;
                 limit.periodInBlocks = periodsInBlocks[j];
                 limit.amountPerPeriod = amountsPerPeriod[j];
-                limit.lastCheckpoint = block.timestamp;
-                limit.leftAmount = int256(amountsPerPeriod[j]);
+                limit.lastCheckpoint = startblocks[i];
+                limit.leftAmount = amountsPerPeriod[j];
                 limits.push(limit);
             }
         }
     }
 
-    function removeLimits(address token, address[] calldata guardlist) public {
-        require(msg.sender == IGuardian(guardian).guardAdmins(token), "LOSSLESS: unauthorized");
-
+    function removeLimits(address token, address[] calldata guardlist) public onlyProtectionAdmin(token) {
         for(uint8 i = 0; i < guardlist.length; i++) {
-            delete tokenGuards[token].limits[guardlist[i]];
+            delete protection[token].limits[guardlist[i]];
         }
     }
 
-    function isTransferAllowed(address token, address sender, uint256 amount) external returns (bool) {
+    function pause(address token, address protectedAddress) public onlyProtectionAdmin(token) {
+        require(lossless.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
+        Limit[] storage limits = protection[token].limits[protectedAddress];
+        require(limits[0].amountPerPeriod != 0, "LOSSLESS: already paused");
+
+        limits.push(cloneLimit(0, limits));
+        // Set first element to be have 0 limit
+        limits[0].amountPerPeriod = 0;
+        limits[0].leftAmount = 0;
+    }
+
+    // TODO:
+
+    function unpause(address token, address protectedAddress) public onlyProtectionAdmin(token) { 
+        require(lossless.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
+        Limit[] storage limits = protection[token].limits[protectedAddress];
+        require(limits[0].amountPerPeriod == 0, "LOSSLESS: not paused");
+        
+        limits[0] = cloneLimit(limits.length - 1, limits);
+        delete limits[limits.length - 1];
+        limits.pop();
+    }
+
+    function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external {
         require(msg.sender == address(lossless), "LOSSLESS: unauthorized");
-        Limit[] storage limits = tokenGuards[token].limits[sender];
+        Limit[] storage limits = protection[token].limits[sender];
 
         // Time period based limits checks
         for(uint256 i = 0; i < limits.length; i++) {
             Limit storage limit = limits[i];
 
-            // Are still in the same period ?
-            if (limit.lastCheckpoint + limit.periodInBlocks > block.timestamp) {
-                limit.leftAmount = limit.leftAmount - int256(amount);
-            } 
-            // New period entered, 
-            // Update checkpoint and reset amount
+            // Is transfer is in the same period ?
+            if (limit.lastCheckpoint + limit.periodInBlocks > block.number) {
+                limit.leftAmount = calculateLeftAmount(amount, limit.leftAmount);
+            }
+            // New period started, update checkpoint and reset amount
             else {
-                uint256 deltaBlocks = block.timestamp - limit.lastCheckpoint;
-                uint256 periodsInDelta = deltaBlocks / limit.periodInBlocks;
-                limit.lastCheckpoint = limit.lastCheckpoint + (limit.periodInBlocks * periodsInDelta);
-                limit.leftAmount = int256(limit.amountPerPeriod) - int256(amount);
+                limit.lastCheckpoint = calculateUpdatedCheckpoint(limit.lastCheckpoint, limit.periodInBlocks, block.number);
+                limit.leftAmount = calculateLeftAmount(amount, limit.amountPerPeriod);
             }
 
-
-            if (limit.leftAmount <= 0) {
-                return false;
-            }
+            require(limit.leftAmount > 0, "LOSSLESS: limit reached");
         }
+    }
 
-        return true;
+    // --- HELPERS ---
+
+    function calculateLeftAmount(uint256 amount, uint256 leftAmount) internal pure returns (uint256)  {
+        if (amount >= leftAmount) {
+            return 0;
+        } else {
+            return leftAmount - amount;
+        }
+    }
+
+    function calculateUpdatedCheckpoint(uint256 lastCheckpoint, uint256 periodInBlocks, uint256 blockNumber) internal pure returns(uint256) {
+        uint256 deltaBlocks = blockNumber - lastCheckpoint;
+        uint256 periodsInDelta = deltaBlocks / periodInBlocks;
+        return lastCheckpoint + (periodInBlocks * periodsInDelta);
+    }
+
+    function cloneLimit(uint256 indexFrom, Limit[] memory limits) internal pure returns (Limit memory limitCopy)  {
+        limitCopy.periodInBlocks = limits[indexFrom].periodInBlocks;
+        limitCopy.amountPerPeriod = limits[indexFrom].amountPerPeriod;
+        limitCopy.lastCheckpoint = limits[indexFrom].lastCheckpoint;
+        limitCopy.leftAmount = limits[indexFrom].leftAmount;
     }
 }

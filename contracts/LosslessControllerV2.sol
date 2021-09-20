@@ -25,7 +25,7 @@ interface LERC20 {
 }
 
 interface IProtectionStrategy {
-    function isTransferAllowed(address token, address sender, uint256 amount) external returns (bool);
+    function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external;
 }
 
 contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgradeable {
@@ -35,21 +35,16 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
 
     address public guardian;
 
-    struct Guard {
-        bool isGuarded;
+    struct Protection {
+        bool isProtected;
         address strategy;
     }
 
-    struct Guards {
-        mapping(address => Guard) guards;
+    struct Protections {
+        mapping(address => Protection) protections;
     }
 
-    struct Freezelist {
-        mapping(address => bool) freezelist;
-    }
-
-    mapping(address => Guards) tokenGuards;
-    mapping(address => Freezelist) tokenFreezelist;
+    mapping(address => Protections) tokenProtections;
 
     event AdminChanged(address indexed previousAdmin, address indexed newAdmin);
     event RecoveryAdminChanged(address indexed previousAdmin, address indexed newAdmin);
@@ -111,60 +106,41 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
         return 2;
     }
 
-    function getIsAddressFreezed(address token, address freezedAddress) public view returns (bool) {
-        return tokenFreezelist[token].freezelist[freezedAddress];
+    function isAddressProtected(address token, address protectedAddress) public view returns (bool) {
+        return tokenProtections[token].protections[protectedAddress].isProtected;
     }
 
-    // GUARDS ADMINISTRATION
+    // GUARD ADMINISTRATION
 
     function setGuardian(address newGuardian) public onlyLosslessAdmin {
         emit GuardianSet(address(guardian), newGuardian);
         guardian = newGuardian;
     }   
 
-    function setGuardedAddress(address token, address guardedAddress, address strategy) external {
-        require(_msgSender() == guardian, "LOSSLESS: sender is not guardian");
-        Guard storage guard = tokenGuards[token].guards[guardedAddress];
-        guard.isGuarded = true;
-        guard.strategy = strategy;
+    function setProtectedAddress(address token, address protectedAddresss, address strategy) external onlyGuardian {
+        Protection storage protection = tokenProtections[token].protections[protectedAddresss];
+        protection.isProtected = true;
+        protection.strategy = strategy;
     }
 
-    function unfreezeAddresses(address token, address[] calldata unfreezelist) external onlyGuardian {
-        for(uint256 i = 0; i < unfreezelist.length; i++) {
-            tokenFreezelist[token].freezelist[unfreezelist[i]] = false;
-        }
-    }
-
-    function refund(address token, address freezedAddress, address refundAddress) external onlyGuardian {
-        address[] memory transferFrom = new address[](1);
-        transferFrom[0] = freezedAddress;
-        uint256 amountToRefund = LERC20(token).balanceOf(freezedAddress);
-        LERC20(token).transferOutBlacklistedFunds(transferFrom);
-        LERC20(token).transfer(refundAddress, amountToRefund);
+    function removeProtectedAddress(address token, address guardedAddress) external onlyGuardian {
+        delete tokenProtections[token].protections[guardedAddress];
     }
 
     // --- BEFORE HOOKS ---
 
     function beforeTransfer(address sender, address recipient, uint256 amount) external {
-        if (tokenGuards[_msgSender()].guards[sender].isGuarded) {
-            bool isAllowed = IProtectionStrategy(tokenGuards[_msgSender()].guards[sender].strategy).isTransferAllowed(_msgSender(), sender, amount);
-            if (isAllowed == false) {
-                tokenFreezelist[msg.sender].freezelist[recipient] = true;
-            }
+        if (tokenProtections[_msgSender()].protections[sender].isProtected) {
+            IProtectionStrategy(tokenProtections[_msgSender()].protections[sender].strategy)
+                .isTransferAllowed(_msgSender(), sender, recipient, amount);
         }
-
-        require(tokenFreezelist[msg.sender].freezelist[sender] == false, "LOSSLESS: sender is freezed");
     }
 
     function beforeTransferFrom(address msgSender, address sender, address recipient, uint256 amount) external {
-        if (tokenGuards[_msgSender()].guards[sender].isGuarded) {
-            bool isAllowed = IProtectionStrategy(tokenGuards[_msgSender()].guards[sender].strategy).isTransferAllowed(_msgSender(), sender, amount);
-            if (isAllowed == false) {
-                tokenFreezelist[msg.sender].freezelist[recipient] = true;
-            }
+        if (tokenProtections[_msgSender()].protections[sender].isProtected) {
+            IProtectionStrategy(tokenProtections[_msgSender()].protections[sender].strategy)
+                .isTransferAllowed(_msgSender(), sender, recipient, amount);
         }
-        
-        require(tokenFreezelist[msg.sender].freezelist[sender] == false, "LOSSLESS: sender is freezed");
     }
 
     function beforeApprove(address sender, address spender, uint256 amount) external {}
