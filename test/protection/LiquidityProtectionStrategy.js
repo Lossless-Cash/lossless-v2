@@ -1,109 +1,70 @@
-/* eslint-disable no-await-in-loop */
-const { time } = require('@openzeppelin/test-helpers');
 const { expect } = require('chai');
-const { ethers } = require('hardhat');
+const {
+  setupControllerAndTokens,
+  deployProtection,
+  mineBlocks,
+} = require('../utils');
 
-let initialHolder;
-let recipient;
-let anotherAccount;
-let admin;
-let adminBackup;
-let lssAdmin;
-let lssRecoveryAdmin;
-let oneMoreAccount;
-let pauseAdmin;
-let guardianAdmin;
-let losslessController;
-let losslessControllerV1;
-let liquidityProtectionStrategy;
-let erc20;
-let guardian;
+let vars;
+let protection;
 
-const name = 'My Token';
-const symbol = 'MTKN';
-const initialSupply = 1000000;
-
-async function mineBlocks(count) {
-  for (let i = 0; i < count; i += 1) {
-    await ethers.provider.send('evm_mine');
-  }
-}
-
-describe.only('LiquidityProtectionStrategy', () => {
+describe('LiquidityProtectionStrategy', () => {
   beforeEach(async () => {
-    [
-      initialHolder,
-      recipient,
-      anotherAccount,
-      admin,
-      lssAdmin,
-      lssRecoveryAdmin,
-      guardianAdmin,
-      pauseAdmin,
-      adminBackup,
-      oneMoreAccount,
-    ] = await ethers.getSigners();
-
-    const LosslessController = await ethers.getContractFactory(
-      'LosslessControllerV1',
-    );
-
-    const LosslessControllerV2 = await ethers.getContractFactory(
-      'LosslessControllerV2',
-    );
-
-    losslessControllerV1 = await upgrades.deployProxy(LosslessController, [
-      lssAdmin.address,
-      lssRecoveryAdmin.address,
-      pauseAdmin.address,
-    ]);
-
-    losslessController = await upgrades.upgradeProxy(
-      losslessControllerV1.address,
-      LosslessControllerV2,
-    );
-
-    const LERC20Mock = await ethers.getContractFactory('LERC20Mock');
-
-    erc20 = await LERC20Mock.deploy(
-      0,
-      name,
-      symbol,
-      initialHolder.address,
-      initialSupply,
-      losslessController.address,
-      admin.address,
-      adminBackup.address,
-      Number(time.duration.days(1)),
-    );
-
-    const LosslessGuardian = await ethers.getContractFactory(
-      'LosslessGuardian',
-    );
-    guardian = await LosslessGuardian.deploy(losslessController.address);
-
-    const LiquidityProtectionStrategy = await ethers.getContractFactory(
-      'LiquidityProtectionStrategy',
-    );
-    liquidityProtectionStrategy = await LiquidityProtectionStrategy.deploy(
-      guardian.address,
-      losslessController.address,
-    );
+    vars = await setupControllerAndTokens();
+    protection = await deployProtection(vars.losslessController);
   });
 
-  describe('addLimitsToGuard', () => {
+  describe('setGuardian', () => {
+    describe('when sender is not lossless admin', () => {
+      it('should revert', async () => {
+        await expect(
+          protection.liquidityProtectionStrategy
+            .connect(vars.anotherAccount)
+            .setGuardian(vars.anotherAccount.address),
+        ).to.be.revertedWith('LOSSLESS: unauthorized');
+      });
+    });
+
+    describe('when sender is lossless admin', () => {
+      it('should succeed', async () => {
+        await protection.liquidityProtectionStrategy
+          .connect(vars.lssAdmin)
+          .setGuardian(vars.anotherAccount.address);
+
+        expect(
+          await protection.liquidityProtectionStrategy.guardian(),
+        ).to.be.equal(vars.anotherAccount.address);
+      });
+
+      it('should emit GuardianSet event', async () => {
+        await expect(
+          protection.liquidityProtectionStrategy
+            .connect(vars.lssAdmin)
+            .setGuardian(vars.anotherAccount.address),
+        )
+          .to.emit(protection.liquidityProtectionStrategy, 'GuardianSet')
+          .withArgs(vars.anotherAccount.address);
+      });
+    });
+  });
+
+  describe('setLimits', () => {
     beforeEach(async () => {
-      await guardian.connect(lssAdmin).verifyToken(erc20.address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[0].address);
 
-      await guardian
-        .connect(admin)
-        .setProtectionAdmin(erc20.address, guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
 
-      await losslessController.connect(lssAdmin).setGuardian(guardian.address);
+      await vars.losslessController
+        .connect(vars.lssAdmin)
+        .setGuardian(protection.guardian.address);
 
-      await guardian
-        .connect(lssAdmin)
-        .verifyStrategies([liquidityProtectionStrategy.address]);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyStrategies([protection.liquidityProtectionStrategy.address]);
     });
 
     describe('when sender is not guard admin', () => {
@@ -111,11 +72,11 @@ describe.only('LiquidityProtectionStrategy', () => {
         const blockNumBefore = await ethers.provider.getBlockNumber();
 
         await expect(
-          liquidityProtectionStrategy
-            .connect(anotherAccount)
-            .addLimitsToGuard(
-              erc20.address,
-              [oneMoreAccount.address, initialHolder.address],
+          protection.liquidityProtectionStrategy
+            .connect(vars.anotherAccount)
+            .setLimits(
+              vars.erc20s[0].address,
+              [vars.oneMoreAccount.address, vars.initialHolder.address],
               [100, 300],
               [10, 25],
               [blockNumBefore, blockNumBefore],
@@ -123,253 +84,248 @@ describe.only('LiquidityProtectionStrategy', () => {
         ).to.be.revertedWith('LOSSLESS: unauthorized');
       });
     });
-  });
 
-  describe('LERC20.transfer', () => {
-    beforeEach(async () => {
-      await guardian.connect(lssAdmin).verifyToken(erc20.address);
-      await guardian
-        .connect(admin)
-        .setProtectionAdmin(erc20.address, guardianAdmin.address);
-
-      await losslessController.connect(lssAdmin).setGuardian(guardian.address);
-
-      await guardian
-        .connect(lssAdmin)
-        .verifyStrategies([liquidityProtectionStrategy.address]);
-
-      const blockNumBefore = await ethers.provider.getBlockNumber();
-      await liquidityProtectionStrategy
-        .connect(guardianAdmin)
-        .addLimitsToGuard(
-          erc20.address,
-          [oneMoreAccount.address, initialHolder.address],
-          [5, 10],
-          [10, 15],
-          [blockNumBefore + 2, blockNumBefore + 2],
-        );
-    });
-
-    describe('when transfering below limit', async () => {
-      it('should not freeze', async () => {
-        await erc20.connect(initialHolder).transfer(recipient.address, 1);
-        await erc20.connect(initialHolder).transfer(recipient.address, 1);
-        await erc20.connect(initialHolder).transfer(recipient.address, 1);
-        await erc20.connect(recipient).transfer(anotherAccount.address, 3);
-        expect(await erc20.balanceOf(anotherAccount.address)).to.be.equal(3);
-      });
-    });
-
-    describe('when transfering above first limit', async () => {
-      it('should revert', async () => {
-        await erc20.connect(initialHolder).transfer(recipient.address, 4);
-        await erc20.connect(initialHolder).transfer(recipient.address, 4);
-        await expect(
-          erc20.connect(initialHolder).transfer(recipient.address, 4),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
-      });
-    });
-
-    describe('when transfering much more that the first limit', async () => {
-      it('should revert', async () => {
-        await erc20.connect(initialHolder).transfer(recipient.address, 4);
-
-        await expect(
-          erc20.connect(initialHolder).transfer(recipient.address, 400),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
-      });
-    });
-
-    describe('when transfering above second limit', async () => {
-      it('should revert', async () => {
+    describe('when sender is guard admin', () => {
+      beforeEach(async () => {
         const blockNumBefore = await ethers.provider.getBlockNumber();
 
-        await liquidityProtectionStrategy
-          .connect(guardianAdmin)
-          .addLimitsToGuard(
-            erc20.address,
-            [oneMoreAccount.address, initialHolder.address],
-            [5, 10],
-            [10, 15],
-            [blockNumBefore + 2, blockNumBefore + 2],
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyAddress(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+            true,
           );
-
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await erc20.connect(initialHolder).transfer(recipient.address, 1);
-        await erc20.connect(initialHolder).transfer(recipient.address, 1);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-
-        await expect(
-          erc20.connect(initialHolder).transfer(recipient.address, 2),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
-      });
-    });
-
-    describe('when transfering much more than the second limit', async () => {
-      it('should revert', async () => {
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await erc20.connect(initialHolder).transfer(recipient.address, 1);
-        await erc20.connect(initialHolder).transfer(recipient.address, 1);
-        await erc20.connect(initialHolder).transfer(recipient.address, 1);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-
-        await expect(
-          erc20.connect(initialHolder).transfer(recipient.address, 200),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
-      });
-    });
-
-    describe('when limit is reset after some time', async () => {
-      it('should not freeze', async () => {
-        await erc20.connect(initialHolder).transfer(recipient.address, 9);
-        await mineBlocks(11);
-        await erc20.connect(initialHolder).transfer(recipient.address, 9);
-        await erc20.connect(recipient).transfer(anotherAccount.address, 1);
-        expect(await erc20.balanceOf(anotherAccount.address)).to.be.equal(1);
-      });
-    });
-
-    describe('when limit is reset after some time and reached again', async () => {
-      it('should revert', async () => {
-        await erc20.connect(initialHolder).transfer(recipient.address, 9);
-        await mineBlocks(10);
-        await erc20.connect(initialHolder).transfer(recipient.address, 9);
-        await expect(
-          erc20.connect(initialHolder).transfer(recipient.address, 9),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
-      });
-    });
-
-    describe('when limit is reset after some time and second limit is reached', async () => {
-      it('should revert', async () => {
-        await erc20.connect(initialHolder).transfer(recipient.address, 9);
-        await mineBlocks(20);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await erc20.connect(initialHolder).transfer(recipient.address, 1);
-        await erc20.connect(initialHolder).transfer(recipient.address, 1);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-
-        await expect(
-          erc20.connect(initialHolder).transfer(recipient.address, 4),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
-      });
-    });
-
-    describe('when limit is reset two times', async () => {
-      it('should suceed', async () => {
-        await erc20.connect(initialHolder).transfer(recipient.address, 9);
-        await mineBlocks(11);
-        await erc20.connect(initialHolder).transfer(recipient.address, 9);
-        await mineBlocks(11);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        expect(await erc20.balanceOf(recipient.address)).to.be.equal(22);
-      });
-    });
-
-    describe('when limit is reset two times and reached then', async () => {
-      it('should revert', async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
-        await liquidityProtectionStrategy
-          .connect(guardianAdmin)
-          .addLimitsToGuard(
-            erc20.address,
-            [oneMoreAccount.address, initialHolder.address],
-            [5, 10],
-            [10, 15],
-            [blockNumBefore + 2, blockNumBefore + 2],
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyAddress(
+            vars.erc20s[0].address,
+            vars.oneMoreAccount.address,
+            true,
           );
-
-        await erc20.connect(initialHolder).transfer(recipient.address, 1);
-        await mineBlocks(11);
-
-        await erc20.connect(initialHolder).transfer(recipient.address, 2);
-        await mineBlocks(11);
-
-        await erc20.connect(initialHolder).transfer(recipient.address, 9);
-        await expect(
-          erc20.connect(initialHolder).transfer(recipient.address, 2),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
-      });
-    });
-
-    describe('when limit is reached', async () => {
-      it('should be reset after some time', async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
-        await liquidityProtectionStrategy
-          .connect(guardianAdmin)
-          .addLimitsToGuard(
-            erc20.address,
-            [oneMoreAccount.address, initialHolder.address],
-            [5, 10],
-            [10, 15],
-            [blockNumBefore + 2, blockNumBefore + 2],
+        await protection.liquidityProtectionStrategy
+          .connect(vars.guardianAdmin)
+          .setLimits(
+            vars.erc20s[0].address,
+            [vars.oneMoreAccount.address, vars.initialHolder.address],
+            [100, 300],
+            [10, 25],
+            [blockNumBefore, blockNumBefore],
           );
-
-        await erc20.connect(initialHolder).transfer(recipient.address, 9);
-        await expect(
-          erc20.connect(initialHolder).transfer(anotherAccount.address, 2),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
-        await mineBlocks(100);
-
-        await erc20.connect(initialHolder).transfer(anotherAccount.address, 2);
-        expect(await erc20.balanceOf(anotherAccount.address)).to.be.equal(2);
       });
-    });
-  });
 
-  describe('setGuardian', () => {
-    describe('when sender is not lossless admin', () => {
-      it('should revert', async () => {
-        await expect(
-          liquidityProtectionStrategy
-            .connect(anotherAccount)
-            .setGuardian(anotherAccount.address),
-        ).to.be.revertedWith('LOSSLESS: unauthorized');
-      });
-    });
-
-    describe('when sender is lossless admin', () => {
       it('should succeed', async () => {
-        await liquidityProtectionStrategy
-          .connect(lssAdmin)
-          .setGuardian(anotherAccount.address);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.oneMoreAccount.address,
+          ),
+        ).to.be.equal(true);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(true);
+        expect(
+          await protection.liquidityProtectionStrategy.getLimitsLength(
+            vars.erc20s[0].address,
+            vars.oneMoreAccount.address,
+          ),
+        ).to.be.equal(2);
+      });
 
-        expect(await liquidityProtectionStrategy.guardian()).to.be.equal(
-          anotherAccount.address,
-        );
+      it('should emit ProtectedAddressSet events', async () => {
+        const blockNumBefore = await ethers.provider.getBlockNumber();
+        await expect(
+          protection.liquidityProtectionStrategy
+            .connect(vars.guardianAdmin)
+            .setLimits(
+              vars.erc20s[0].address,
+              [vars.oneMoreAccount.address, vars.initialHolder.address],
+              [100, 300],
+              [10, 25],
+              [blockNumBefore, blockNumBefore],
+            ),
+        )
+          .to.emit(vars.losslessController, 'ProtectedAddressSet')
+          .withArgs(
+            vars.erc20s[0].address,
+            vars.oneMoreAccount.address,
+            protection.liquidityProtectionStrategy.address,
+          );
+
+        await expect(
+          protection.liquidityProtectionStrategy
+            .connect(vars.guardianAdmin)
+            .setLimits(
+              vars.erc20s[0].address,
+              [vars.oneMoreAccount.address, vars.initialHolder.address],
+              [100, 300],
+              [10, 25],
+              [blockNumBefore, blockNumBefore],
+            ),
+        )
+          .to.emit(vars.losslessController, 'ProtectedAddressSet')
+          .withArgs(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+            protection.liquidityProtectionStrategy.address,
+          );
+      });
+
+      it('should not affect other tokens', async () => {
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[1].address,
+            vars.oneMoreAccount.address,
+          ),
+        ).to.be.equal(false);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[1].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(false);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[2].address,
+            vars.anotherAccount.address,
+          ),
+        ).to.be.equal(false);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[2].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(false);
+
+        expect(
+          await protection.liquidityProtectionStrategy.getLimitsLength(
+            vars.erc20s[1].address,
+            vars.oneMoreAccount.address,
+          ),
+        ).to.be.equal(0);
+        expect(
+          await protection.liquidityProtectionStrategy.getLimitsLength(
+            vars.erc20s[1].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(0);
+
+        expect(
+          await protection.liquidityProtectionStrategy.getLimitsLength(
+            vars.erc20s[2].address,
+            vars.oneMoreAccount.address,
+          ),
+        ).to.be.equal(0);
+        expect(
+          await protection.liquidityProtectionStrategy.getLimitsLength(
+            vars.erc20s[2].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(0);
       });
     });
   });
 
   describe('removeLimits', () => {
     beforeEach(async () => {
-      await guardian.connect(lssAdmin).verifyToken(erc20.address);
-      await guardian
-        .connect(admin)
-        .setProtectionAdmin(erc20.address, guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[0].address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[1].address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[2].address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[1].address, vars.guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[2].address, vars.guardianAdmin.address);
 
-      await losslessController.connect(lssAdmin).setGuardian(guardian.address);
+      await vars.losslessController
+        .connect(vars.lssAdmin)
+        .setGuardian(protection.guardian.address);
 
-      await guardian
-        .connect(lssAdmin)
-        .verifyStrategies([liquidityProtectionStrategy.address]);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyStrategies([protection.liquidityProtectionStrategy.address]);
 
       const blockNumBefore = await ethers.provider.getBlockNumber();
-      await liquidityProtectionStrategy
-        .connect(guardianAdmin)
-        .addLimitsToGuard(
-          erc20.address,
-          [oneMoreAccount.address, initialHolder.address],
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[0].address,
+          vars.initialHolder.address,
+          true,
+        );
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[0].address,
+          vars.oneMoreAccount.address,
+          true,
+        );
+      await protection.liquidityProtectionStrategy
+        .connect(vars.guardianAdmin)
+        .setLimits(
+          vars.erc20s[0].address,
+          [vars.oneMoreAccount.address, vars.initialHolder.address],
+          [5, 10],
+          [10, 15],
+          [blockNumBefore, blockNumBefore],
+        );
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[1].address,
+          vars.initialHolder.address,
+          true,
+        );
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[1].address,
+          vars.oneMoreAccount.address,
+          true,
+        );
+      await protection.liquidityProtectionStrategy
+        .connect(vars.guardianAdmin)
+        .setLimits(
+          vars.erc20s[1].address,
+          [vars.oneMoreAccount.address, vars.initialHolder.address],
+          [5, 10],
+          [10, 15],
+          [blockNumBefore, blockNumBefore],
+        );
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[2].address,
+          vars.initialHolder.address,
+          true,
+        );
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[2].address,
+          vars.oneMoreAccount.address,
+          true,
+        );
+      await protection.liquidityProtectionStrategy
+        .connect(vars.guardianAdmin)
+        .setLimits(
+          vars.erc20s[2].address,
+          [vars.oneMoreAccount.address, vars.initialHolder.address],
           [5, 10],
           [10, 15],
           [blockNumBefore, blockNumBefore],
@@ -379,52 +335,146 @@ describe.only('LiquidityProtectionStrategy', () => {
     describe('when sender is not admin', () => {
       it('should revert', async () => {
         await expect(
-          liquidityProtectionStrategy
-            .connect(anotherAccount)
-            .removeLimits(erc20.address, [
-              oneMoreAccount.address,
-              initialHolder.address,
+          protection.liquidityProtectionStrategy
+            .connect(vars.anotherAccount)
+            .removeLimits(vars.erc20s[0].address, [
+              vars.oneMoreAccount.address,
+              vars.initialHolder.address,
             ]),
         ).to.be.revertedWith('LOSSLESS: unauthorized');
       });
     });
 
     describe('when sender is admin', () => {
-      it('should succeed', async () => {
-        await liquidityProtectionStrategy
-          .connect(guardianAdmin)
-          .removeLimits(erc20.address, [
-            oneMoreAccount.address,
-            initialHolder.address,
+      beforeEach(async () => {
+        await protection.liquidityProtectionStrategy
+          .connect(vars.guardianAdmin)
+          .removeLimits(vars.erc20s[0].address, [
+            vars.oneMoreAccount.address,
+            vars.initialHolder.address,
           ]);
+      });
 
-        await erc20.connect(initialHolder).transfer(recipient.address, 100);
-        await erc20.connect(recipient).transfer(anotherAccount.address, 100);
-        expect(await erc20.balanceOf(anotherAccount.address)).to.be.equal(100);
+      it('should succeed', async () => {
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.oneMoreAccount.address,
+          ),
+        ).to.be.equal(false);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(false);
+
+        expect(
+          await protection.liquidityProtectionStrategy.getLimitsLength(
+            vars.erc20s[0].address,
+            vars.oneMoreAccount.address,
+          ),
+        ).to.be.equal(0);
+      });
+
+      it('should emit RemovedProtectedAddress events', async () => {
+        await expect(
+          await protection.liquidityProtectionStrategy
+            .connect(vars.guardianAdmin)
+            .removeLimits(vars.erc20s[0].address, [
+              vars.oneMoreAccount.address,
+              vars.initialHolder.address,
+            ]),
+        )
+          .to.emit(vars.losslessController, 'RemovedProtectedAddress')
+          .withArgs(vars.erc20s[0].address, vars.oneMoreAccount.address);
+
+        await expect(
+          await protection.liquidityProtectionStrategy
+            .connect(vars.guardianAdmin)
+            .removeLimits(vars.erc20s[0].address, [
+              vars.oneMoreAccount.address,
+              vars.initialHolder.address,
+            ]),
+        )
+          .to.emit(vars.losslessController, 'RemovedProtectedAddress')
+          .withArgs(vars.erc20s[0].address, vars.initialHolder.address);
+      });
+
+      it('should not affect other tokens', async () => {
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[1].address,
+            vars.oneMoreAccount.address,
+          ),
+        ).to.be.equal(true);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[1].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(true);
+
+        expect(
+          await protection.liquidityProtectionStrategy.getLimitsLength(
+            vars.erc20s[1].address,
+            vars.oneMoreAccount.address,
+          ),
+        ).to.be.equal(2);
+
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[2].address,
+            vars.oneMoreAccount.address,
+          ),
+        ).to.be.equal(true);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[2].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(true);
+
+        expect(
+          await protection.liquidityProtectionStrategy.getLimitsLength(
+            vars.erc20s[2].address,
+            vars.oneMoreAccount.address,
+          ),
+        ).to.be.equal(2);
       });
     });
   });
 
   describe('pause', () => {
     beforeEach(async () => {
-      await guardian.connect(lssAdmin).verifyToken(erc20.address);
-      await guardian
-        .connect(admin)
-        .setProtectionAdmin(erc20.address, guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[0].address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[1].address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[1].address, vars.guardianAdmin.address);
 
-      await losslessController.connect(lssAdmin).setGuardian(guardian.address);
+      await vars.losslessController
+        .connect(vars.lssAdmin)
+        .setGuardian(protection.guardian.address);
 
-      await guardian
-        .connect(lssAdmin)
-        .verifyStrategies([liquidityProtectionStrategy.address]);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyStrategies([protection.liquidityProtectionStrategy.address]);
     });
 
     describe('when sender is not admin', () => {
       it('should revert', async () => {
         await expect(
-          liquidityProtectionStrategy
-            .connect(anotherAccount)
-            .pause(erc20.address, initialHolder.address),
+          protection.liquidityProtectionStrategy
+            .connect(vars.anotherAccount)
+            .pause(vars.erc20s[0].address, vars.initialHolder.address),
         ).to.be.revertedWith('LOSSLESS: unauthorized');
       });
     });
@@ -433,9 +483,9 @@ describe.only('LiquidityProtectionStrategy', () => {
       describe('when address is not protected', () => {
         it('should revert', async () => {
           await expect(
-            liquidityProtectionStrategy
-              .connect(guardianAdmin)
-              .pause(erc20.address, initialHolder.address),
+            protection.liquidityProtectionStrategy
+              .connect(vars.guardianAdmin)
+              .pause(vars.erc20s[0].address, vars.initialHolder.address),
           ).to.be.revertedWith('LOSSLESS: not protected');
         });
       });
@@ -443,11 +493,49 @@ describe.only('LiquidityProtectionStrategy', () => {
       describe('when address is protected', () => {
         beforeEach(async () => {
           const blockNumBefore = await ethers.provider.getBlockNumber();
-          await liquidityProtectionStrategy
-            .connect(guardianAdmin)
-            .addLimitsToGuard(
-              erc20.address,
-              [oneMoreAccount.address, initialHolder.address],
+          await protection.guardian
+            .connect(vars.lssAdmin)
+            .verifyAddress(
+              vars.erc20s[0].address,
+              vars.initialHolder.address,
+              true,
+            );
+          await protection.guardian
+            .connect(vars.lssAdmin)
+            .verifyAddress(
+              vars.erc20s[0].address,
+              vars.oneMoreAccount.address,
+              true,
+            );
+          await protection.liquidityProtectionStrategy
+            .connect(vars.guardianAdmin)
+            .setLimits(
+              vars.erc20s[0].address,
+              [vars.oneMoreAccount.address, vars.initialHolder.address],
+              [5, 10],
+              [10, 15],
+              [blockNumBefore, blockNumBefore],
+            );
+
+          await protection.guardian
+            .connect(vars.lssAdmin)
+            .verifyAddress(
+              vars.erc20s[1].address,
+              vars.initialHolder.address,
+              true,
+            );
+          await protection.guardian
+            .connect(vars.lssAdmin)
+            .verifyAddress(
+              vars.erc20s[1].address,
+              vars.oneMoreAccount.address,
+              true,
+            );
+          await protection.liquidityProtectionStrategy
+            .connect(vars.guardianAdmin)
+            .setLimits(
+              vars.erc20s[1].address,
+              [vars.oneMoreAccount.address, vars.initialHolder.address],
               [5, 10],
               [10, 15],
               [blockNumBefore, blockNumBefore],
@@ -456,29 +544,65 @@ describe.only('LiquidityProtectionStrategy', () => {
 
         describe('when address is already paused', () => {
           beforeEach(async () => {
-            await liquidityProtectionStrategy
-              .connect(guardianAdmin)
-              .pause(erc20.address, initialHolder.address);
+            await protection.liquidityProtectionStrategy
+              .connect(vars.guardianAdmin)
+              .pause(vars.erc20s[0].address, vars.initialHolder.address);
           });
 
           it('should revert', async () => {
             await expect(
-              liquidityProtectionStrategy
-                .connect(guardianAdmin)
-                .pause(erc20.address, initialHolder.address),
+              protection.liquidityProtectionStrategy
+                .connect(vars.guardianAdmin)
+                .pause(vars.erc20s[0].address, vars.initialHolder.address),
             ).to.be.revertedWith('LOSSLESS: already paused');
           });
         });
 
         describe('when address is not already paused', () => {
-          it('should succeed', async () => {
-            await liquidityProtectionStrategy
-              .connect(guardianAdmin)
-              .pause(erc20.address, initialHolder.address);
+          beforeEach(async () => {
+            await protection.liquidityProtectionStrategy
+              .connect(vars.guardianAdmin)
+              .pause(vars.erc20s[0].address, vars.initialHolder.address);
+          });
 
+          it('should succeed', async () => {
             await expect(
-              erc20.connect(initialHolder).transfer(recipient.address, 1),
+              vars.erc20s[0]
+                .connect(vars.initialHolder)
+                .transfer(vars.recipient.address, 1),
             ).to.be.revertedWith('LOSSLESS: limit reached');
+            expect(
+              await protection.liquidityProtectionStrategy.getLimitsLength(
+                vars.erc20s[0].address,
+                vars.initialHolder.address,
+              ),
+            ).to.be.equal(3);
+          });
+
+          it('should emit Paused event', async () => {
+            await expect(
+              protection.liquidityProtectionStrategy
+                .connect(vars.guardianAdmin)
+                .pause(vars.erc20s[0].address, vars.oneMoreAccount.address),
+            )
+              .to.emit(protection.liquidityProtectionStrategy, 'Paused')
+              .withArgs(vars.erc20s[0].address, vars.oneMoreAccount.address);
+          });
+
+          it('should not affect other tokens', async () => {
+            expect(
+              await protection.liquidityProtectionStrategy.getLimitsLength(
+                vars.erc20s[1].address,
+                vars.initialHolder.address,
+              ),
+            ).to.be.equal(2);
+
+            expect(
+              await protection.liquidityProtectionStrategy.getLimitsLength(
+                vars.erc20s[2].address,
+                vars.initialHolder.address,
+              ),
+            ).to.be.equal(0);
           });
         });
       });
@@ -487,24 +611,38 @@ describe.only('LiquidityProtectionStrategy', () => {
 
   describe('unpause', () => {
     beforeEach(async () => {
-      await guardian.connect(lssAdmin).verifyToken(erc20.address);
-      await guardian
-        .connect(admin)
-        .setProtectionAdmin(erc20.address, guardianAdmin.address);
-
-      await losslessController.connect(lssAdmin).setGuardian(guardian.address);
-
-      await guardian
-        .connect(lssAdmin)
-        .verifyStrategies([liquidityProtectionStrategy.address]);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[0].address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[1].address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[2].address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[1].address, vars.guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[2].address, vars.guardianAdmin.address);
+      await vars.losslessController
+        .connect(vars.lssAdmin)
+        .setGuardian(protection.guardian.address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyStrategies([protection.liquidityProtectionStrategy.address]);
     });
 
     describe('when sender is not admin', () => {
       it('should revert', async () => {
         await expect(
-          liquidityProtectionStrategy
-            .connect(anotherAccount)
-            .unpause(erc20.address, initialHolder.address),
+          protection.liquidityProtectionStrategy
+            .connect(vars.anotherAccount)
+            .unpause(vars.erc20s[0].address, vars.initialHolder.address),
         ).to.be.revertedWith('LOSSLESS: unauthorized');
       });
     });
@@ -513,9 +651,9 @@ describe.only('LiquidityProtectionStrategy', () => {
       describe('when address is not protected', () => {
         it('should revert', async () => {
           await expect(
-            liquidityProtectionStrategy
-              .connect(guardianAdmin)
-              .unpause(erc20.address, initialHolder.address),
+            protection.liquidityProtectionStrategy
+              .connect(vars.guardianAdmin)
+              .unpause(vars.erc20s[0].address, vars.initialHolder.address),
           ).to.be.revertedWith('LOSSLESS: not protected');
         });
       });
@@ -523,11 +661,71 @@ describe.only('LiquidityProtectionStrategy', () => {
       describe('when address is protected', () => {
         beforeEach(async () => {
           const blockNumBefore = await ethers.provider.getBlockNumber();
-          await liquidityProtectionStrategy
-            .connect(guardianAdmin)
-            .addLimitsToGuard(
-              erc20.address,
-              [oneMoreAccount.address, initialHolder.address],
+          await protection.guardian
+            .connect(vars.lssAdmin)
+            .verifyAddress(
+              vars.erc20s[0].address,
+              vars.initialHolder.address,
+              true,
+            );
+          await protection.guardian
+            .connect(vars.lssAdmin)
+            .verifyAddress(
+              vars.erc20s[0].address,
+              vars.oneMoreAccount.address,
+              true,
+            );
+          await protection.liquidityProtectionStrategy
+            .connect(vars.guardianAdmin)
+            .setLimits(
+              vars.erc20s[0].address,
+              [vars.oneMoreAccount.address, vars.initialHolder.address],
+              [5, 10],
+              [10, 15],
+              [blockNumBefore, blockNumBefore],
+            );
+          await protection.guardian
+            .connect(vars.lssAdmin)
+            .verifyAddress(
+              vars.erc20s[1].address,
+              vars.initialHolder.address,
+              true,
+            );
+          await protection.guardian
+            .connect(vars.lssAdmin)
+            .verifyAddress(
+              vars.erc20s[1].address,
+              vars.oneMoreAccount.address,
+              true,
+            );
+          await protection.liquidityProtectionStrategy
+            .connect(vars.guardianAdmin)
+            .setLimits(
+              vars.erc20s[1].address,
+              [vars.oneMoreAccount.address, vars.initialHolder.address],
+              [5, 10],
+              [10, 15],
+              [blockNumBefore, blockNumBefore],
+            );
+          await protection.guardian
+            .connect(vars.lssAdmin)
+            .verifyAddress(
+              vars.erc20s[2].address,
+              vars.initialHolder.address,
+              true,
+            );
+          await protection.guardian
+            .connect(vars.lssAdmin)
+            .verifyAddress(
+              vars.erc20s[2].address,
+              vars.oneMoreAccount.address,
+              true,
+            );
+          await protection.liquidityProtectionStrategy
+            .connect(vars.guardianAdmin)
+            .setLimits(
+              vars.erc20s[2].address,
+              [vars.oneMoreAccount.address, vars.initialHolder.address],
               [5, 10],
               [10, 15],
               [blockNumBefore, blockNumBefore],
@@ -536,35 +734,510 @@ describe.only('LiquidityProtectionStrategy', () => {
 
         describe('when address is paused', () => {
           beforeEach(async () => {
-            await liquidityProtectionStrategy
-              .connect(guardianAdmin)
-              .pause(erc20.address, initialHolder.address);
+            await protection.liquidityProtectionStrategy
+              .connect(vars.guardianAdmin)
+              .pause(vars.erc20s[0].address, vars.initialHolder.address);
+            await protection.liquidityProtectionStrategy
+              .connect(vars.guardianAdmin)
+              .pause(vars.erc20s[0].address, vars.oneMoreAccount.address);
+            await protection.liquidityProtectionStrategy
+              .connect(vars.guardianAdmin)
+              .pause(vars.erc20s[1].address, vars.initialHolder.address);
+
+            await protection.liquidityProtectionStrategy
+              .connect(vars.guardianAdmin)
+              .unpause(vars.erc20s[0].address, vars.initialHolder.address);
           });
 
           it('should succeed', async () => {
+            await vars.erc20s[0]
+              .connect(vars.initialHolder)
+              .transfer(vars.recipient.address, 1);
+            expect(
+              await vars.erc20s[0].balanceOf(vars.recipient.address),
+            ).to.be.equal(1);
+            expect(
+              await protection.liquidityProtectionStrategy.getLimitsLength(
+                vars.erc20s[0].address,
+                vars.initialHolder.address,
+              ),
+            ).to.be.equal(2);
+          });
+
+          it('should emit Unpaused event', async () => {
             await expect(
-              erc20.connect(initialHolder).transfer(recipient.address, 1),
-            ).to.be.revertedWith('LOSSLESS: limit reached');
+              protection.liquidityProtectionStrategy
+                .connect(vars.guardianAdmin)
+                .unpause(vars.erc20s[0].address, vars.oneMoreAccount.address),
+            )
+              .to.emit(protection.liquidityProtectionStrategy, 'Unpaused')
+              .withArgs(vars.erc20s[0].address, vars.oneMoreAccount.address);
+          });
 
-            await liquidityProtectionStrategy
-              .connect(guardianAdmin)
-              .unpause(erc20.address, initialHolder.address);
-
-            await erc20.connect(initialHolder).transfer(recipient.address, 1);
-            expect(await erc20.balanceOf(recipient.address)).to.be.equal(1);
+          it('should not affect other tokens', async () => {
+            expect(
+              await protection.liquidityProtectionStrategy.getLimitsLength(
+                vars.erc20s[1].address,
+                vars.initialHolder.address,
+              ),
+            ).to.be.equal(3);
+            expect(
+              await protection.liquidityProtectionStrategy.getLimitsLength(
+                vars.erc20s[2].address,
+                vars.initialHolder.address,
+              ),
+            ).to.be.equal(2);
           });
         });
 
         describe('when address is not paused', () => {
-          it('should succeed', async () => {
+          it('should re', async () => {
             await await expect(
-              liquidityProtectionStrategy
-                .connect(guardianAdmin)
-                .unpause(erc20.address, initialHolder.address),
+              protection.liquidityProtectionStrategy
+                .connect(vars.guardianAdmin)
+                .unpause(vars.erc20s[0].address, vars.initialHolder.address),
             ).to.be.revertedWith('LOSSLESS: not paused');
           });
         });
       });
+    });
+  });
+
+  describe('LERC20.transfer', () => {
+    beforeEach(async () => {
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[0].address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
+
+      await vars.losslessController
+        .connect(vars.lssAdmin)
+        .setGuardian(protection.guardian.address);
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyStrategies([protection.liquidityProtectionStrategy.address]);
+
+      const blockNumBefore = await ethers.provider.getBlockNumber();
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[0].address,
+          vars.initialHolder.address,
+          true,
+        );
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[0].address,
+          vars.oneMoreAccount.address,
+          true,
+        );
+      await protection.liquidityProtectionStrategy
+        .connect(vars.guardianAdmin)
+        .setLimits(
+          vars.erc20s[0].address,
+          [vars.oneMoreAccount.address, vars.initialHolder.address],
+          [5, 10],
+          [10, 15],
+          [blockNumBefore + 2, blockNumBefore + 2],
+        );
+    });
+
+    describe('when transfering below limit', async () => {
+      it('should not freeze', async () => {
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 1);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 1);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 1);
+        await vars.erc20s[0]
+          .connect(vars.recipient)
+          .transfer(vars.anotherAccount.address, 3);
+        expect(
+          await vars.erc20s[0].balanceOf(vars.anotherAccount.address),
+        ).to.be.equal(3);
+      });
+    });
+
+    describe('when transfering above first limit', async () => {
+      it('should revert', async () => {
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 4);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 4);
+        await expect(
+          vars.erc20s[0]
+            .connect(vars.initialHolder)
+            .transfer(vars.recipient.address, 4),
+        ).to.be.revertedWith('LOSSLESS: limit reached');
+      });
+    });
+
+    describe('when transfering much more that the first limit', async () => {
+      it('should revert', async () => {
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 4);
+
+        await expect(
+          vars.erc20s[0]
+            .connect(vars.initialHolder)
+            .transfer(vars.recipient.address, 400),
+        ).to.be.revertedWith('LOSSLESS: limit reached');
+      });
+    });
+
+    describe('when transfering above second limit', async () => {
+      it('should revert', async () => {
+        const blockNumBefore = await ethers.provider.getBlockNumber();
+
+        await protection.liquidityProtectionStrategy
+          .connect(vars.guardianAdmin)
+          .setLimits(
+            vars.erc20s[0].address,
+            [vars.oneMoreAccount.address, vars.initialHolder.address],
+            [5, 10],
+            [10, 15],
+            [blockNumBefore + 2, blockNumBefore + 2],
+          );
+
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 1);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 1);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+
+        await expect(
+          vars.erc20s[0]
+            .connect(vars.initialHolder)
+            .transfer(vars.recipient.address, 2),
+        ).to.be.revertedWith('LOSSLESS: limit reached');
+      });
+    });
+
+    describe('when transfering much more than the second limit', async () => {
+      it('should revert', async () => {
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 1);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 1);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 1);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+
+        await expect(
+          vars.erc20s[0]
+            .connect(vars.initialHolder)
+            .transfer(vars.recipient.address, 200),
+        ).to.be.revertedWith('LOSSLESS: limit reached');
+      });
+    });
+
+    describe('when limit is reset after some time', async () => {
+      it('should not freeze', async () => {
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 9);
+        await mineBlocks(11);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 9);
+        await vars.erc20s[0]
+          .connect(vars.recipient)
+          .transfer(vars.anotherAccount.address, 1);
+        expect(
+          await vars.erc20s[0].balanceOf(vars.anotherAccount.address),
+        ).to.be.equal(1);
+      });
+    });
+
+    describe('when limit is reset after some time and reached again', async () => {
+      it('should revert', async () => {
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 9);
+        await mineBlocks(10);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 9);
+        await expect(
+          vars.erc20s[0]
+            .connect(vars.initialHolder)
+            .transfer(vars.recipient.address, 9),
+        ).to.be.revertedWith('LOSSLESS: limit reached');
+      });
+    });
+
+    describe('when limit is reset after some time and second limit is reached', async () => {
+      it('should revert', async () => {
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 9);
+        await mineBlocks(19);
+
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 1);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 1);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+
+        await expect(
+          vars.erc20s[0]
+            .connect(vars.initialHolder)
+            .transfer(vars.recipient.address, 4),
+        ).to.be.revertedWith('LOSSLESS: limit reached');
+      });
+    });
+
+    describe('when limit is reset two times', async () => {
+      it('should suceed', async () => {
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 9);
+        await mineBlocks(11);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 9);
+        await mineBlocks(11);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        expect(
+          await vars.erc20s[0].balanceOf(vars.recipient.address),
+        ).to.be.equal(22);
+      });
+    });
+
+    describe('when limit is reset two times and reached then', async () => {
+      it('should revert', async () => {
+        const blockNumBefore = await ethers.provider.getBlockNumber();
+        await protection.liquidityProtectionStrategy
+          .connect(vars.guardianAdmin)
+          .setLimits(
+            vars.erc20s[0].address,
+            [vars.oneMoreAccount.address, vars.initialHolder.address],
+            [5, 10],
+            [10, 15],
+            [blockNumBefore + 2, blockNumBefore + 2],
+          );
+
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 1);
+        await mineBlocks(11);
+
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 2);
+        await mineBlocks(11);
+
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 9);
+        await expect(
+          vars.erc20s[0]
+            .connect(vars.initialHolder)
+            .transfer(vars.recipient.address, 2),
+        ).to.be.revertedWith('LOSSLESS: limit reached');
+      });
+    });
+
+    describe('when limit is reached', async () => {
+      it('should be reset after some time', async () => {
+        const blockNumBefore = await ethers.provider.getBlockNumber();
+        await protection.liquidityProtectionStrategy
+          .connect(vars.guardianAdmin)
+          .setLimits(
+            vars.erc20s[0].address,
+            [vars.oneMoreAccount.address, vars.initialHolder.address],
+            [5, 10],
+            [10, 15],
+            [blockNumBefore + 2, blockNumBefore + 2],
+          );
+
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 9);
+        await expect(
+          vars.erc20s[0]
+            .connect(vars.initialHolder)
+            .transfer(vars.anotherAccount.address, 2),
+        ).to.be.revertedWith('LOSSLESS: limit reached');
+        await mineBlocks(100);
+
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.anotherAccount.address, 2);
+        expect(
+          await vars.erc20s[0].balanceOf(vars.anotherAccount.address),
+        ).to.be.equal(2);
+      });
+    });
+  });
+
+  describe('getLimit', () => {
+    beforeEach(async () => {
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[0].address);
+
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
+
+      await vars.losslessController
+        .connect(vars.lssAdmin)
+        .setGuardian(protection.guardian.address);
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyStrategies([protection.liquidityProtectionStrategy.address]);
+
+      const blockNumBefore = await ethers.provider.getBlockNumber();
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[0].address,
+          vars.initialHolder.address,
+          true,
+        );
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[0].address,
+          vars.oneMoreAccount.address,
+          true,
+        );
+      await protection.liquidityProtectionStrategy
+        .connect(vars.guardianAdmin)
+        .setLimits(
+          vars.erc20s[0].address,
+          [vars.oneMoreAccount.address, vars.initialHolder.address],
+          [100, 300],
+          [10, 25],
+          [blockNumBefore, blockNumBefore],
+        );
+
+      await vars.erc20s[0]
+        .connect(vars.initialHolder)
+        .transfer(vars.anotherAccount.address, 2);
+    });
+
+    it('should return limit data', async () => {
+      const blockNumBefore = await ethers.provider.getBlockNumber();
+      const firstAddressLimit1 = await protection.liquidityProtectionStrategy.getLimit(
+        vars.erc20s[0].address,
+        vars.oneMoreAccount.address,
+        0,
+      );
+
+      expect(firstAddressLimit1[0].toString()).to.be.equal('100');
+      expect(firstAddressLimit1[1].toString()).to.be.equal('10');
+      expect(firstAddressLimit1[2].toString()).to.be.equal('10');
+      expect(firstAddressLimit1[3].toString()).to.be.equal(
+        (blockNumBefore - 4).toString(),
+      );
+
+      const firstAddressLimit2 = await protection.liquidityProtectionStrategy.getLimit(
+        vars.erc20s[0].address,
+        vars.oneMoreAccount.address,
+        1,
+      );
+
+      expect(firstAddressLimit2[0].toString()).to.be.equal('300');
+      expect(firstAddressLimit2[1].toString()).to.be.equal('25');
+      expect(firstAddressLimit2[2].toString()).to.be.equal('25');
+      expect(firstAddressLimit2[3].toString()).to.be.equal(
+        (blockNumBefore - 4).toString(),
+      );
+
+      const secondAddressLimit1 = await protection.liquidityProtectionStrategy.getLimit(
+        vars.erc20s[0].address,
+        vars.initialHolder.address,
+        0,
+      );
+
+      expect(secondAddressLimit1[0].toString()).to.be.equal('100');
+      expect(secondAddressLimit1[1].toString()).to.be.equal('10');
+      expect(secondAddressLimit1[2].toString()).to.be.equal('8');
+      expect(secondAddressLimit1[3].toString()).to.be.equal(
+        (blockNumBefore - 4).toString(),
+      );
+
+      const secondAddressLimit2 = await protection.liquidityProtectionStrategy.getLimit(
+        vars.erc20s[0].address,
+        vars.initialHolder.address,
+        1,
+      );
+
+      expect(secondAddressLimit2[0].toString()).to.be.equal('300');
+      expect(secondAddressLimit2[1].toString()).to.be.equal('25');
+      expect(secondAddressLimit2[2].toString()).to.be.equal('23');
+      expect(secondAddressLimit2[3].toString()).to.be.equal(
+        (blockNumBefore - 4).toString(),
+      );
     });
   });
 });

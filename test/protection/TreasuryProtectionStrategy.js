@@ -1,168 +1,285 @@
-const { time } = require('@openzeppelin/test-helpers');
 const { expect } = require('chai');
-const { ethers } = require('hardhat');
+const { setupControllerAndTokens, deployProtection } = require('../utils');
 
-let initialHolder;
-let recipient;
-let anotherAccount;
-let admin;
-let adminBackup;
-let lssAdmin;
-let lssRecoveryAdmin;
-let oneMoreAccount;
-let pauseAdmin;
-let guardianAdmin;
-let treasuryProtectionStrategy;
-let losslessController;
-let losslessControllerV1;
-let erc20;
-let guardian;
-
-const name = 'My Token';
-const symbol = 'MTKN';
-const initialSupply = 1000000;
+let vars;
+let protection;
 
 describe('TreasuryProtectionStrategy', () => {
   beforeEach(async () => {
-    [
-      initialHolder,
-      recipient,
-      anotherAccount,
-      admin,
-      lssAdmin,
-      lssRecoveryAdmin,
-      guardianAdmin,
-      pauseAdmin,
-      adminBackup,
-      oneMoreAccount,
-    ] = await ethers.getSigners();
-
-    const LosslessController = await ethers.getContractFactory(
-      'LosslessControllerV1',
-    );
-
-    const LosslessControllerV2 = await ethers.getContractFactory(
-      'LosslessControllerV2',
-    );
-
-    losslessControllerV1 = await upgrades.deployProxy(LosslessController, [
-      lssAdmin.address,
-      lssRecoveryAdmin.address,
-      pauseAdmin.address,
-    ]);
-
-    losslessController = await upgrades.upgradeProxy(
-      losslessControllerV1.address,
-      LosslessControllerV2,
-    );
-
-    const LERC20Mock = await ethers.getContractFactory('LERC20Mock');
-
-    erc20 = await LERC20Mock.deploy(
-      0,
-      name,
-      symbol,
-      initialHolder.address,
-      initialSupply,
-      losslessController.address,
-      admin.address,
-      adminBackup.address,
-      Number(time.duration.days(1)),
-    );
-
-    const LosslessGuardian = await ethers.getContractFactory(
-      'LosslessGuardian',
-    );
-    guardian = await LosslessGuardian.deploy(losslessController.address);
-
-    const TreasuryProtectionStrategy = await ethers.getContractFactory(
-      'TreasuryProtectionStrategy',
-    );
-    treasuryProtectionStrategy = await TreasuryProtectionStrategy.deploy(
-      guardian.address,
-      losslessController.address,
-    );
+    vars = await setupControllerAndTokens();
+    protection = await deployProtection(vars.losslessController);
   });
 
-  describe('setProtectedAddress', () => {
-    beforeEach(async () => {
-      await guardian.connect(lssAdmin).verifyToken(erc20.address);
-      await guardian
-        .connect(admin)
-        .setProtectionAdmin(erc20.address, guardianAdmin.address);
-
-      await losslessController.connect(lssAdmin).setGuardian(guardian.address);
-
-      await guardian
-        .connect(lssAdmin)
-        .verifyStrategies([treasuryProtectionStrategy.address]);
-    });
-
-    describe('when sender is not guard admin', () => {
+  describe('setGuardian', () => {
+    describe('when sender is not lossless admin', () => {
       it('should revert', async () => {
         await expect(
-          treasuryProtectionStrategy
-            .connect(anotherAccount)
-            .setProtectedAddress(erc20.address, initialHolder.address, [
-              recipient.address,
-            ]),
+          protection.treasuryProtectionStrategy
+            .connect(vars.anotherAccount)
+            .setGuardian(vars.anotherAccount.address),
         ).to.be.revertedWith('LOSSLESS: unauthorized');
       });
     });
 
-    describe('when sender is guard admin', () => {
+    describe('when sender is lossless admin', () => {
+      it('should succeed', async () => {
+        await protection.treasuryProtectionStrategy
+          .connect(vars.lssAdmin)
+          .setGuardian(vars.anotherAccount.address);
+
+        expect(
+          await protection.treasuryProtectionStrategy.guardian(),
+        ).to.be.equal(vars.anotherAccount.address);
+      });
+
+      it('should emit GuardianSet event', async () => {
+        await expect(
+          protection.treasuryProtectionStrategy
+            .connect(vars.lssAdmin)
+            .setGuardian(vars.anotherAccount.address),
+        )
+          .to.emit(protection.treasuryProtectionStrategy, 'GuardianSet')
+          .withArgs(vars.anotherAccount.address);
+      });
+    });
+  });
+
+  describe('setProtectedAddress', () => {
+    beforeEach(async () => {
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[0].address);
+
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
+
+      await vars.losslessController
+        .connect(vars.lssAdmin)
+        .setGuardian(protection.guardian.address);
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyStrategies([protection.treasuryProtectionStrategy.address]);
+    });
+
+    describe('when sender is not protection admin', () => {
+      it('should revert', async () => {
+        await expect(
+          protection.treasuryProtectionStrategy
+            .connect(vars.anotherAccount)
+            .setProtectedAddress(
+              vars.erc20s[0].address,
+              vars.initialHolder.address,
+              [vars.recipient.address],
+            ),
+        ).to.be.revertedWith('LOSSLESS: unauthorized');
+      });
+    });
+
+    describe('when sender is protection admin', () => {
       it('should succeed', async () => {
         expect(
-          await losslessController.isAddressProtected(
-            erc20.address,
-            initialHolder.address,
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
           ),
         ).to.be.equal(false);
 
-        await treasuryProtectionStrategy
-          .connect(guardianAdmin)
-          .setProtectedAddress(erc20.address, initialHolder.address, [
-            recipient.address,
-          ]);
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyAddress(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+            true,
+          );
+        await protection.treasuryProtectionStrategy
+          .connect(vars.guardianAdmin)
+          .setProtectedAddress(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+            [vars.recipient.address],
+          );
 
         expect(
-          await losslessController.isAddressProtected(
-            erc20.address,
-            initialHolder.address,
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
           ),
         ).to.be.equal(true);
+      });
+
+      it('should emit ProtectedAddressSet event', async () => {
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyAddress(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+            true,
+          );
+        await expect(
+          protection.treasuryProtectionStrategy
+            .connect(vars.guardianAdmin)
+            .setProtectedAddress(
+              vars.erc20s[0].address,
+              vars.initialHolder.address,
+              [vars.recipient.address],
+            ),
+        )
+          .to.emit(vars.losslessController, 'ProtectedAddressSet')
+          .withArgs(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+            protection.treasuryProtectionStrategy.address,
+          );
+      });
+
+      it('should not affect other tokens', async () => {
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyToken(vars.erc20s[1].address);
+
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyToken(vars.erc20s[2].address);
+
+        await protection.guardian
+          .connect(vars.admin)
+          .setProtectionAdmin(
+            vars.erc20s[1].address,
+            vars.guardianAdmin.address,
+          );
+
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(false);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[2].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(false);
+
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyAddress(
+            vars.erc20s[1].address,
+            vars.initialHolder.address,
+            true,
+          );
+        await protection.treasuryProtectionStrategy
+          .connect(vars.guardianAdmin)
+          .setProtectedAddress(
+            vars.erc20s[1].address,
+            vars.initialHolder.address,
+            [vars.recipient.address],
+          );
+
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(false);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[2].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(false);
       });
     });
   });
 
   describe('removeProtectedAddresses', () => {
     beforeEach(async () => {
-      await guardian.connect(lssAdmin).verifyToken(erc20.address);
-      await guardian
-        .connect(admin)
-        .setProtectionAdmin(erc20.address, guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[0].address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[1].address);
 
-      await losslessController.connect(lssAdmin).setGuardian(guardian.address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[2].address);
 
-      await guardian
-        .connect(lssAdmin)
-        .verifyStrategies([treasuryProtectionStrategy.address]);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[1].address, vars.guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[2].address, vars.guardianAdmin.address);
 
-      await treasuryProtectionStrategy
-        .connect(guardianAdmin)
-        .setProtectedAddress(erc20.address, oneMoreAccount.address, [
-          recipient.address,
-        ]);
+      await vars.losslessController
+        .connect(vars.lssAdmin)
+        .setGuardian(protection.guardian.address);
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyStrategies([protection.treasuryProtectionStrategy.address]);
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[0].address,
+          vars.initialHolder.address,
+          true,
+        );
+
+      await protection.treasuryProtectionStrategy
+        .connect(vars.guardianAdmin)
+        .setProtectedAddress(
+          vars.erc20s[0].address,
+          vars.initialHolder.address,
+          [vars.recipient.address, vars.anotherAccount.address],
+        );
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[1].address,
+          vars.initialHolder.address,
+          true,
+        );
+      await protection.treasuryProtectionStrategy
+        .connect(vars.guardianAdmin)
+        .setProtectedAddress(
+          vars.erc20s[1].address,
+          vars.initialHolder.address,
+          [vars.recipient.address, vars.anotherAccount.address],
+        );
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[2].address,
+          vars.initialHolder.address,
+          true,
+        );
+      await protection.treasuryProtectionStrategy
+        .connect(vars.guardianAdmin)
+        .setProtectedAddress(
+          vars.erc20s[2].address,
+          vars.initialHolder.address,
+          [vars.recipient.address, vars.anotherAccount.address],
+        );
     });
 
     describe('when sender is not admin', () => {
       it('should revert', async () => {
         await expect(
-          treasuryProtectionStrategy
-            .connect(anotherAccount)
-            .removeProtectedAddresses(erc20.address, [
-              oneMoreAccount.address,
-              initialHolder.address,
+          protection.treasuryProtectionStrategy
+            .connect(vars.anotherAccount)
+            .removeProtectedAddresses(vars.erc20s[0].address, [
+              vars.oneMoreAccount.address,
+              vars.initialHolder.address,
             ]),
         ).to.be.revertedWith('LOSSLESS: unauthorized');
       });
@@ -171,28 +288,118 @@ describe('TreasuryProtectionStrategy', () => {
     describe('when sender is admin', () => {
       it('should succeed', async () => {
         expect(
-          await losslessController.isAddressProtected(
-            erc20.address,
-            oneMoreAccount.address,
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
           ),
         ).to.be.equal(true);
 
-        await treasuryProtectionStrategy
-          .connect(guardianAdmin)
-          .removeProtectedAddresses(erc20.address, [
-            oneMoreAccount.address,
-            initialHolder.address,
+        await protection.treasuryProtectionStrategy
+          .connect(vars.guardianAdmin)
+          .removeProtectedAddresses(vars.erc20s[0].address, [
+            vars.initialHolder.address,
           ]);
 
-        await erc20.connect(initialHolder).transfer(recipient.address, 10001);
-        await erc20.connect(recipient).transfer(anotherAccount.address, 10001);
-        expect(await erc20.balanceOf(anotherAccount.address)).to.be.equal(
-          10001,
-        );
         expect(
-          await losslessController.isAddressProtected(
-            erc20.address,
-            oneMoreAccount.address,
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(false);
+      });
+
+      it('should emit RemovedProtectedAddress event', async () => {
+        await expect(
+          protection.treasuryProtectionStrategy
+            .connect(vars.guardianAdmin)
+            .removeProtectedAddresses(vars.erc20s[0].address, [
+              vars.initialHolder.address,
+            ]),
+        )
+          .to.emit(vars.losslessController, 'RemovedProtectedAddress')
+          .withArgs(vars.erc20s[0].address, vars.initialHolder.address);
+      });
+
+      it('should succeed with a list of protected addresses', async () => {
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyAddress(vars.erc20s[0].address, vars.recipient.address, true);
+        await protection.treasuryProtectionStrategy
+          .connect(vars.guardianAdmin)
+          .setProtectedAddress(vars.erc20s[0].address, vars.recipient.address, [
+            vars.anotherAccount.address,
+          ]);
+
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(true);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.recipient.address,
+          ),
+        ).to.be.equal(true);
+
+        await protection.treasuryProtectionStrategy
+          .connect(vars.guardianAdmin)
+          .removeProtectedAddresses(vars.erc20s[0].address, [
+            vars.initialHolder.address,
+            vars.recipient.address,
+          ]);
+
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(false);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.recipient.address,
+          ),
+        ).to.be.equal(false);
+      });
+
+      it('should not affect other tokens', async () => {
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(true);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[2].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(true);
+
+        await protection.treasuryProtectionStrategy
+          .connect(vars.guardianAdmin)
+          .removeProtectedAddresses(vars.erc20s[1].address, [
+            vars.initialHolder.address,
+          ]);
+
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(true);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[2].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(true);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[1].address,
+            vars.oneMoreAccount.address,
           ),
         ).to.be.equal(false);
       });
@@ -201,61 +408,109 @@ describe('TreasuryProtectionStrategy', () => {
 
   describe('LERC20.transfer', () => {
     beforeEach(async () => {
-      await guardian.connect(lssAdmin).verifyToken(erc20.address);
-      await guardian
-        .connect(admin)
-        .setProtectionAdmin(erc20.address, guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[0].address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[1].address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[2].address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[1].address, vars.guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[2].address, vars.guardianAdmin.address);
 
-      await losslessController.connect(lssAdmin).setGuardian(guardian.address);
+      await vars.losslessController
+        .connect(vars.lssAdmin)
+        .setGuardian(protection.guardian.address);
 
-      await guardian
-        .connect(lssAdmin)
-        .verifyStrategies([treasuryProtectionStrategy.address]);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyStrategies([protection.treasuryProtectionStrategy.address]);
 
-      await treasuryProtectionStrategy
-        .connect(guardianAdmin)
-        .setProtectedAddress(erc20.address, initialHolder.address, [
-          recipient.address,
-        ]);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[0].address,
+          vars.initialHolder.address,
+          true,
+        );
+      await protection.treasuryProtectionStrategy
+        .connect(vars.guardianAdmin)
+        .setProtectedAddress(
+          vars.erc20s[0].address,
+          vars.initialHolder.address,
+          [vars.recipient.address, vars.anotherAccount.address],
+        );
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[1].address,
+          vars.anotherAccount.address,
+          true,
+        );
+      await protection.treasuryProtectionStrategy
+        .connect(vars.guardianAdmin)
+        .setProtectedAddress(
+          vars.erc20s[1].address,
+          vars.anotherAccount.address,
+          [vars.recipient.address, vars.initialHolder.address],
+        );
+
+      await vars.erc20s[1]
+        .connect(vars.initialHolder)
+        .transfer(vars.anotherAccount.address, 100);
     });
 
     describe('when transfering to whitelisted', async () => {
-      it('should suceed', async () => {
-        await erc20.connect(initialHolder).transfer(recipient.address, 10);
-        await erc20.connect(recipient).transfer(anotherAccount.address, 10);
-        expect(await erc20.balanceOf(anotherAccount.address)).to.be.equal(10);
+      it('should suceed for token 1', async () => {
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 10);
+        await vars.erc20s[0]
+          .connect(vars.recipient)
+          .transfer(vars.anotherAccount.address, 10);
+        expect(
+          await vars.erc20s[0].balanceOf(vars.anotherAccount.address),
+        ).to.be.equal(10);
+      });
+
+      it('should suceed for token 2', async () => {
+        await vars.erc20s[1]
+          .connect(vars.anotherAccount)
+          .transfer(vars.recipient.address, 10);
+        await vars.erc20s[1]
+          .connect(vars.anotherAccount)
+          .transfer(vars.initialHolder.address, 10);
+        expect(
+          await vars.erc20s[1].balanceOf(vars.recipient.address),
+        ).to.be.equal(10);
       });
     });
 
     describe('when transfering not to whitelisted', async () => {
-      it('should revert', async () => {
+      it('should revert for token 1', async () => {
         await expect(
-          erc20.connect(initialHolder).transfer(anotherAccount.address, 101),
-        ).to.be.revertedWith('LOSSLESS: recipient not whitelisted');
+          vars.erc20s[0]
+            .connect(vars.initialHolder)
+            .transfer(vars.oneMoreAccount.address, 101),
+        ).to.be.revertedWith('LOSSLESS: not whitelisted');
       });
-    });
-  });
 
-  describe('setGuardian', () => {
-    describe('when sender is not lossless admin', () => {
-      it('should revert', async () => {
+      it('should revert for token 2', async () => {
         await expect(
-          treasuryProtectionStrategy
-            .connect(anotherAccount)
-            .setGuardian(anotherAccount.address),
-        ).to.be.revertedWith('LOSSLESS: unauthorized');
-      });
-    });
-
-    describe('when sender is lossless admin', () => {
-      it('should succeed', async () => {
-        await treasuryProtectionStrategy
-          .connect(lssAdmin)
-          .setGuardian(anotherAccount.address);
-
-        expect(await treasuryProtectionStrategy.guardian()).to.be.equal(
-          anotherAccount.address,
-        );
+          vars.erc20s[1]
+            .connect(vars.anotherAccount)
+            .transfer(vars.oneMoreAccount.address, 101),
+        ).to.be.revertedWith('LOSSLESS: not whitelisted');
       });
     });
   });

@@ -3,22 +3,6 @@ pragma solidity ^0.8.4;
 
 import "hardhat/console.sol";
 
-interface LERC20 {
-    function totalSupply() external view returns (uint256);
-
-    function balanceOf(address account) external view returns (uint256);
-
-    function transfer(address recipient, uint256 amount) external returns (bool);
-
-    function allowance(address owner, address spender) external view returns (uint256);
-
-    function approve(address spender, uint256 amount) external returns (bool);
-
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
-
-    function getAdmin() external returns (address);
-}
-
 interface ILosslessController {
     function admin() external returns(address);
 }
@@ -46,6 +30,8 @@ contract TreasuryProtectionStrategy {
     IGuardian public guardian;
     ILosslessController public lossless;
 
+    event GuardianSet(address indexed newGuardian);
+
     constructor(address _guardian, address _lossless) {
         guardian = IGuardian(_guardian);
         lossless = ILosslessController(_lossless);
@@ -64,6 +50,7 @@ contract TreasuryProtectionStrategy {
     function setGuardian(address newGuardian) public {
         require(msg.sender == lossless.admin(), "LOSSLESS: unauthorized");
         guardian = IGuardian(newGuardian);
+        emit GuardianSet(newGuardian);
     }
 
     function setProtectedAddress(address token, address protectedAddress, address[] calldata whitelist) public onlyProtectionAdmin(token) {
@@ -82,6 +69,12 @@ contract TreasuryProtectionStrategy {
     }
 
     function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external view {
-        require(protectedAddresses[token].protection[sender].whitelist[recipient], "LOSSLESS: recipient not whitelisted");
+        require(isAddressWhitelisted(token, sender, recipient), "LOSSLESS: not whitelisted");
+    }
+
+    // --- VIEWS ---
+
+    function isAddressWhitelisted(address token, address protectedAddress, address whitelistedAddress) public view returns(bool){
+        return protectedAddresses[token].protection[protectedAddress].whitelist[whitelistedAddress];
     }
 }

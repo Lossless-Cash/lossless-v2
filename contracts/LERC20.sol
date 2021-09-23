@@ -102,7 +102,6 @@ contract LERC20 is Context, IERC20 {
         if (isLosslessOn) {
             lossless.beforeTransfer(_msgSender(), recipient, amount);
             _;
-            lossless.afterTransfer(_msgSender(), recipient, amount);
         } else {
             _;
         }
@@ -112,7 +111,6 @@ contract LERC20 is Context, IERC20 {
         if (isLosslessOn) {
             lossless.beforeTransferFrom(_msgSender(),sender, recipient, amount);
             _;
-            lossless.afterTransferFrom(_msgSender(), sender, recipient, amount);
         } else {
             _;
         }
@@ -122,7 +120,6 @@ contract LERC20 is Context, IERC20 {
         if (isLosslessOn) {
             lossless.beforeIncreaseAllowance(_msgSender(), spender, addedValue);
             _;
-            lossless.afterIncreaseAllowance(_msgSender(), spender, addedValue);
         } else {
             _;
         }
@@ -132,7 +129,6 @@ contract LERC20 is Context, IERC20 {
         if (isLosslessOn) {
             lossless.beforeDecreaseAllowance(_msgSender(), spender, subtractedValue);
             _;
-            lossless.afterDecreaseAllowance(_msgSender(), spender, subtractedValue);
         } else {
             _;
         }

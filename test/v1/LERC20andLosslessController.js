@@ -57,8 +57,6 @@
 //     LosslessControllerV2,
 //   );
 
-//   await losslessController.connect(lssAdmin).initialize();
-
 //   const LERC20Mock = await ethers.getContractFactory('LERC20Mock');
 //   erc20 = await LERC20Mock.deploy(
 //     0,

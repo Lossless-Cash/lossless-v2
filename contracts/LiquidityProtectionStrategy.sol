@@ -3,10 +3,6 @@ pragma solidity ^0.8.0;
 
 import "hardhat/console.sol";
 
-interface LERC20 {
-    function getAdmin() external returns (address);
-}
-
 interface ILosslessController {
     function admin() external returns(address);
 
@@ -17,6 +13,8 @@ interface IGuardian {
     function protectionAdmin(address token) external returns (address);
 
     function setProtectedAddress(address token, address guardedAddress, address strategy) external;
+
+    function removeProtectedAddresses(address token, address protectedAddress) external;
 }
 
 error NotAllowed(address sender, uint256 amount);
@@ -26,7 +24,7 @@ contract LiquidityProtectionStrategy {
         uint256 periodInBlocks;
         uint256 amountPerPeriod;
 
-        uint256 leftAmount;
+        uint256 amountLeft;
         uint256 lastCheckpoint;
     }
 
@@ -37,6 +35,10 @@ contract LiquidityProtectionStrategy {
     mapping(address => Protection) private protection;
     IGuardian public guardian;
     ILosslessController public lossless;
+
+    event GuardianSet(address indexed newGuardian);
+    event Paused(address indexed token, address indexed protectedAddress);
+    event Unpaused(address indexed token, address indexed protectedAddress);
 
     constructor(address _guardian, address _lossless) {
         guardian = IGuardian(_guardian);
@@ -56,9 +58,10 @@ contract LiquidityProtectionStrategy {
     function setGuardian(address newGuardian) public {
         require(msg.sender == lossless.admin(), "LOSSLESS: unauthorized");
         guardian = IGuardian(newGuardian);
+        emit GuardianSet(newGuardian);
     }
 
-    function addLimitsToGuard(
+    function setLimits(
         address token,
         address[] calldata guardlist,
         uint256[] calldata periodsInBlocks,
@@ -74,15 +77,16 @@ contract LiquidityProtectionStrategy {
                 limit.periodInBlocks = periodsInBlocks[j];
                 limit.amountPerPeriod = amountsPerPeriod[j];
                 limit.lastCheckpoint = startblocks[i];
-                limit.leftAmount = amountsPerPeriod[j];
+                limit.amountLeft = amountsPerPeriod[j];
                 limits.push(limit);
             }
         }
     }
 
-    function removeLimits(address token, address[] calldata guardlist) public onlyProtectionAdmin(token) {
-        for(uint8 i = 0; i < guardlist.length; i++) {
-            delete protection[token].limits[guardlist[i]];
+    function removeLimits(address token, address[] calldata list) public onlyProtectionAdmin(token) {
+        for(uint8 i = 0; i < list.length; i++) {
+            delete protection[token].limits[list[i]];
+            guardian.removeProtectedAddresses(token, list[i]);
         }
     }
 
@@ -94,10 +98,10 @@ contract LiquidityProtectionStrategy {
         limits.push(cloneLimit(0, limits));
         // Set first element to be have 0 limit
         limits[0].amountPerPeriod = 0;
-        limits[0].leftAmount = 0;
-    }
+        limits[0].amountLeft = 0;
 
-    // TODO:
+        emit Paused(token, protectedAddress);
+    }
 
     function unpause(address token, address protectedAddress) public onlyProtectionAdmin(token) { 
         require(lossless.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
@@ -107,37 +111,39 @@ contract LiquidityProtectionStrategy {
         limits[0] = cloneLimit(limits.length - 1, limits);
         delete limits[limits.length - 1];
         limits.pop();
+
+        emit Unpaused(token, protectedAddress);
     }
 
     function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external {
         require(msg.sender == address(lossless), "LOSSLESS: unauthorized");
         Limit[] storage limits = protection[token].limits[sender];
-
+        
         // Time period based limits checks
         for(uint256 i = 0; i < limits.length; i++) {
             Limit storage limit = limits[i];
 
             // Is transfer is in the same period ?
             if (limit.lastCheckpoint + limit.periodInBlocks > block.number) {
-                limit.leftAmount = calculateLeftAmount(amount, limit.leftAmount);
+                limit.amountLeft = calculateAmountLeft(amount, limit.amountLeft);
             }
             // New period started, update checkpoint and reset amount
             else {
                 limit.lastCheckpoint = calculateUpdatedCheckpoint(limit.lastCheckpoint, limit.periodInBlocks, block.number);
-                limit.leftAmount = calculateLeftAmount(amount, limit.amountPerPeriod);
+                limit.amountLeft = calculateAmountLeft(amount, limit.amountPerPeriod);
             }
-
-            require(limit.leftAmount > 0, "LOSSLESS: limit reached");
+            
+            require(limit.amountLeft > 0, "LOSSLESS: limit reached");
         }
     }
 
     // --- HELPERS ---
 
-    function calculateLeftAmount(uint256 amount, uint256 leftAmount) internal pure returns (uint256)  {
-        if (amount >= leftAmount) {
+    function calculateAmountLeft(uint256 amount, uint256 amountLeft) internal pure returns (uint256)  {
+        if (amount >= amountLeft) {
             return 0;
         } else {
-            return leftAmount - amount;
+            return amountLeft - amount;
         }
     }
 
@@ -151,6 +157,16 @@ contract LiquidityProtectionStrategy {
         limitCopy.periodInBlocks = limits[indexFrom].periodInBlocks;
         limitCopy.amountPerPeriod = limits[indexFrom].amountPerPeriod;
         limitCopy.lastCheckpoint = limits[indexFrom].lastCheckpoint;
-        limitCopy.leftAmount = limits[indexFrom].leftAmount;
+        limitCopy.amountLeft = limits[indexFrom].amountLeft;
+    }
+
+    // --- VIEWS ---
+
+    function getLimitsLength(address token, address protectedAddress) public view returns(uint256) {
+        return protection[token].limits[protectedAddress].length;
+    }
+
+    function getLimit(address token, address protectedAddress, uint256 index) public view returns(Limit memory) {
+        return protection[token].limits[protectedAddress][index];
     }
 }

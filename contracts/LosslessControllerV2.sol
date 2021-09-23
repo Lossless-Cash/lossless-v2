@@ -6,24 +6,6 @@ import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "hardhat/console.sol";
 
-interface LERC20 {
-    function totalSupply() external view returns (uint256);
-
-    function balanceOf(address account) external view returns (uint256);
-
-    function transfer(address recipient, uint256 amount) external returns (bool);
-
-    function allowance(address owner, address spender) external view returns (uint256);
-
-    function approve(address spender, uint256 amount) external returns (bool);
-
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
-
-    function getAdmin() external returns (address);
-
-    function transferOutBlacklistedFunds(address[] calldata from) external;
-}
-
 interface IProtectionStrategy {
     function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external;
 }
@@ -33,27 +15,25 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     address public admin;
     address public recoveryAdmin;
 
+    // --- V2 VARIABLES ---
     address public guardian;
 
     struct Protection {
         bool isProtected;
         address strategy;
     }
-
     struct Protections {
         mapping(address => Protection) protections;
     }
-
     mapping(address => Protections) tokenProtections;
 
     event AdminChanged(address indexed previousAdmin, address indexed newAdmin);
     event RecoveryAdminChanged(address indexed previousAdmin, address indexed newAdmin);
     event PauseAdminChanged(address indexed previousAdmin, address indexed newAdmin);
 
-    event ReportSubmitted(address indexed token, address indexed account, uint256 reportId);
-    event AnotherReportSubmitted(address indexed token, address indexed account, uint256 reportId);
-    event Staked(address indexed token, address indexed account, uint256 reportId);
     event GuardianSet(address indexed oldGuardian, address indexed newGuardian);
+    event ProtectedAddressSet(address indexed token, address indexed protectedAddress, address indexed strategy);
+    event RemovedProtectedAddress(address indexed token, address indexed protectedAddress);
 
     // --- MODIFIERS ---
 
@@ -72,7 +52,21 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
         _;
     }
 
-    // --- ADMIN STUFF ---
+    // --- VIEWS ---
+
+    function getVersion() public pure returns (uint256) {
+        return 2;
+    }
+
+    function isAddressProtected(address token, address protectedAddress) public view returns (bool) {
+        return tokenProtections[token].protections[protectedAddress].isProtected;
+    }
+
+    function getProtectedAddressStrategy(address token, address protectedAddress) public view returns (address) {
+        return tokenProtections[token].protections[protectedAddress].strategy;
+    }
+
+    // --- ADMINISTRATION ---
 
     function pause() public {
         require(_msgSender() == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
@@ -99,32 +93,23 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
         pauseAdmin = newPauseAdmin;
     }
 
+    // --- GUARD ---
 
-    // --- GETTERS ---
-
-    function getVersion() public pure returns (uint256) {
-        return 2;
-    }
-
-    function isAddressProtected(address token, address protectedAddress) public view returns (bool) {
-        return tokenProtections[token].protections[protectedAddress].isProtected;
-    }
-
-    // GUARD ADMINISTRATION
-
-    function setGuardian(address newGuardian) public onlyLosslessAdmin {
+    function setGuardian(address newGuardian) public onlyLosslessAdmin whenNotPaused {
         emit GuardianSet(address(guardian), newGuardian);
         guardian = newGuardian;
-    }   
+    }
 
-    function setProtectedAddress(address token, address protectedAddresss, address strategy) external onlyGuardian {
+    function setProtectedAddress(address token, address protectedAddresss, address strategy) external onlyGuardian whenNotPaused {
         Protection storage protection = tokenProtections[token].protections[protectedAddresss];
         protection.isProtected = true;
         protection.strategy = strategy;
+        emit ProtectedAddressSet(token, protectedAddresss, strategy);
     }
 
-    function removeProtectedAddress(address token, address guardedAddress) external onlyGuardian {
-        delete tokenProtections[token].protections[guardedAddress];
+    function removeProtectedAddress(address token, address protectedAddresss) external onlyGuardian whenNotPaused {
+        delete tokenProtections[token].protections[protectedAddresss];
+        emit RemovedProtectedAddress(token, protectedAddresss);
     }
 
     // --- BEFORE HOOKS ---
