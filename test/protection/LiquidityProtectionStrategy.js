@@ -21,7 +21,7 @@ describe('LiquidityProtectionStrategy', () => {
           protection.liquidityProtectionStrategy
             .connect(vars.anotherAccount)
             .setGuardian(vars.anotherAccount.address),
-        ).to.be.revertedWith('LOSSLESS: unauthorized');
+        ).to.be.revertedWith('LOSSLESS: not lossless admin');
       });
     });
 
@@ -53,10 +53,19 @@ describe('LiquidityProtectionStrategy', () => {
       await protection.guardian
         .connect(vars.lssAdmin)
         .verifyToken(vars.erc20s[0].address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[1].address);
 
       await protection.guardian
         .connect(vars.admin)
         .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(
+          vars.erc20s[1].address,
+          vars.oneMoreAccount.address,
+        );
 
       await vars.losslessController
         .connect(vars.lssAdmin)
@@ -81,7 +90,25 @@ describe('LiquidityProtectionStrategy', () => {
               [10, 25],
               [blockNumBefore, blockNumBefore],
             ),
-        ).to.be.revertedWith('LOSSLESS: unauthorized');
+        ).to.be.revertedWith('LOSSLESS: not protection admin');
+      });
+    });
+
+    describe('when sender is protection admin of another token', () => {
+      it('should revert', async () => {
+        const blockNumBefore = await ethers.provider.getBlockNumber();
+
+        await expect(
+          protection.liquidityProtectionStrategy
+            .connect(vars.oneMoreAccount)
+            .setLimits(
+              vars.erc20s[0].address,
+              [vars.oneMoreAccount.address, vars.initialHolder.address],
+              [100, 300],
+              [10, 25],
+              [blockNumBefore, blockNumBefore],
+            ),
+        ).to.be.revertedWith('LOSSLESS: not protection admin');
       });
     });
 
@@ -245,7 +272,10 @@ describe('LiquidityProtectionStrategy', () => {
         .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
       await protection.guardian
         .connect(vars.admin)
-        .setProtectionAdmin(vars.erc20s[1].address, vars.guardianAdmin.address);
+        .setProtectionAdmin(
+          vars.erc20s[1].address,
+          vars.oneMoreAccount.address,
+        );
       await protection.guardian
         .connect(vars.admin)
         .setProtectionAdmin(vars.erc20s[2].address, vars.guardianAdmin.address);
@@ -298,7 +328,7 @@ describe('LiquidityProtectionStrategy', () => {
           true,
         );
       await protection.liquidityProtectionStrategy
-        .connect(vars.guardianAdmin)
+        .connect(vars.oneMoreAccount)
         .setLimits(
           vars.erc20s[1].address,
           [vars.oneMoreAccount.address, vars.initialHolder.address],
@@ -341,7 +371,20 @@ describe('LiquidityProtectionStrategy', () => {
               vars.oneMoreAccount.address,
               vars.initialHolder.address,
             ]),
-        ).to.be.revertedWith('LOSSLESS: unauthorized');
+        ).to.be.revertedWith('LOSSLESS: not protection admin');
+      });
+    });
+
+    describe('when sender is protection admin of another token', () => {
+      it('should revert', async () => {
+        await expect(
+          protection.liquidityProtectionStrategy
+            .connect(vars.oneMoreAccount)
+            .removeLimits(vars.erc20s[0].address, [
+              vars.oneMoreAccount.address,
+              vars.initialHolder.address,
+            ]),
+        ).to.be.revertedWith('LOSSLESS: not protection admin');
       });
     });
 
@@ -458,7 +501,10 @@ describe('LiquidityProtectionStrategy', () => {
         .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
       await protection.guardian
         .connect(vars.admin)
-        .setProtectionAdmin(vars.erc20s[1].address, vars.guardianAdmin.address);
+        .setProtectionAdmin(
+          vars.erc20s[1].address,
+          vars.oneMoreAccount.address,
+        );
 
       await vars.losslessController
         .connect(vars.lssAdmin)
@@ -475,7 +521,17 @@ describe('LiquidityProtectionStrategy', () => {
           protection.liquidityProtectionStrategy
             .connect(vars.anotherAccount)
             .pause(vars.erc20s[0].address, vars.initialHolder.address),
-        ).to.be.revertedWith('LOSSLESS: unauthorized');
+        ).to.be.revertedWith('LOSSLESS: not protection admin');
+      });
+    });
+
+    describe('when sender is protection admin of another token', () => {
+      it('should revert', async () => {
+        await expect(
+          protection.liquidityProtectionStrategy
+            .connect(vars.oneMoreAccount)
+            .pause(vars.erc20s[0].address, vars.initialHolder.address),
+        ).to.be.revertedWith('LOSSLESS: not protection admin');
       });
     });
 
@@ -532,7 +588,7 @@ describe('LiquidityProtectionStrategy', () => {
               true,
             );
           await protection.liquidityProtectionStrategy
-            .connect(vars.guardianAdmin)
+            .connect(vars.oneMoreAccount)
             .setLimits(
               vars.erc20s[1].address,
               [vars.oneMoreAccount.address, vars.initialHolder.address],
@@ -625,7 +681,10 @@ describe('LiquidityProtectionStrategy', () => {
         .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
       await protection.guardian
         .connect(vars.admin)
-        .setProtectionAdmin(vars.erc20s[1].address, vars.guardianAdmin.address);
+        .setProtectionAdmin(
+          vars.erc20s[1].address,
+          vars.oneMoreAccount.address,
+        );
       await protection.guardian
         .connect(vars.admin)
         .setProtectionAdmin(vars.erc20s[2].address, vars.guardianAdmin.address);
@@ -643,7 +702,17 @@ describe('LiquidityProtectionStrategy', () => {
           protection.liquidityProtectionStrategy
             .connect(vars.anotherAccount)
             .unpause(vars.erc20s[0].address, vars.initialHolder.address),
-        ).to.be.revertedWith('LOSSLESS: unauthorized');
+        ).to.be.revertedWith('LOSSLESS: not protection admin');
+      });
+    });
+
+    describe('when sender is protection admin of another token', () => {
+      it('should revert', async () => {
+        await expect(
+          protection.liquidityProtectionStrategy
+            .connect(vars.oneMoreAccount)
+            .unpause(vars.erc20s[0].address, vars.initialHolder.address),
+        ).to.be.revertedWith('LOSSLESS: not protection admin');
       });
     });
 
@@ -699,7 +768,7 @@ describe('LiquidityProtectionStrategy', () => {
               true,
             );
           await protection.liquidityProtectionStrategy
-            .connect(vars.guardianAdmin)
+            .connect(vars.oneMoreAccount)
             .setLimits(
               vars.erc20s[1].address,
               [vars.oneMoreAccount.address, vars.initialHolder.address],
@@ -741,7 +810,7 @@ describe('LiquidityProtectionStrategy', () => {
               .connect(vars.guardianAdmin)
               .pause(vars.erc20s[0].address, vars.oneMoreAccount.address);
             await protection.liquidityProtectionStrategy
-              .connect(vars.guardianAdmin)
+              .connect(vars.oneMoreAccount)
               .pause(vars.erc20s[1].address, vars.initialHolder.address);
 
             await protection.liquidityProtectionStrategy
@@ -791,7 +860,7 @@ describe('LiquidityProtectionStrategy', () => {
         });
 
         describe('when address is not paused', () => {
-          it('should re', async () => {
+          it('should revert', async () => {
             await await expect(
               protection.liquidityProtectionStrategy
                 .connect(vars.guardianAdmin)
@@ -1239,5 +1308,22 @@ describe('LiquidityProtectionStrategy', () => {
         (blockNumBefore - 4).toString(),
       );
     });
+  });
+
+  describe('isTransferAllowed', () => {
+    describe('when sender is not lossless controller', () => [
+      it('should revert', async () => {
+        await expect(
+          protection.liquidityProtectionStrategy
+            .connect(vars.anotherAccount)
+            .isTransferAllowed(
+              vars.erc20s[0].address,
+              vars.initialHolder.address,
+              vars.recipient.address,
+              1,
+            ),
+        ).to.be.revertedWith('LOSSLESS: not lossless controller');
+      }),
+    ]);
   });
 });

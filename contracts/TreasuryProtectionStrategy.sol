@@ -37,18 +37,13 @@ contract TreasuryProtectionStrategy {
         lossless = ILosslessController(_lossless);
     }
 
-    modifier onlyGuardian() {
-        require(msg.sender == address(guardian), "LOSSLESS: unauthorized");
-        _;
-    }
-
     modifier onlyProtectionAdmin(address token) {
-        require(msg.sender == guardian.protectionAdmin(token), "LOSSLESS: unauthorized");
+        require(msg.sender == guardian.protectionAdmin(token), "LOSSLESS: not protection admin");
         _;
     }
 
     function setGuardian(address newGuardian) public {
-        require(msg.sender == lossless.admin(), "LOSSLESS: unauthorized");
+        require(msg.sender == lossless.admin(), "LOSSLESS: not lossless admin");
         guardian = IGuardian(newGuardian);
         emit GuardianSet(newGuardian);
     }

@@ -45,18 +45,13 @@ contract LiquidityProtectionStrategy {
         lossless = ILosslessController(_lossless);
     }
 
-    modifier onlyGuardian() {
-        require(msg.sender == address(guardian), "LOSSLESS: unauthorized");
-        _;
-    }
-
     modifier onlyProtectionAdmin(address token) {
-        require(msg.sender == guardian.protectionAdmin(token), "LOSSLESS: unauthorized");
+        require(msg.sender == guardian.protectionAdmin(token), "LOSSLESS: not protection admin");
         _;
     }
 
     function setGuardian(address newGuardian) public {
-        require(msg.sender == lossless.admin(), "LOSSLESS: unauthorized");
+        require(msg.sender == lossless.admin(), "LOSSLESS: not lossless admin");
         guardian = IGuardian(newGuardian);
         emit GuardianSet(newGuardian);
     }
@@ -116,7 +111,7 @@ contract LiquidityProtectionStrategy {
     }
 
     function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external {
-        require(msg.sender == address(lossless), "LOSSLESS: unauthorized");
+        require(msg.sender == address(lossless), "LOSSLESS: not lossless controller");
         Limit[] storage limits = protection[token].limits[sender];
         
         // Time period based limits checks

@@ -17,7 +17,7 @@ describe('TreasuryProtectionStrategy', () => {
           protection.treasuryProtectionStrategy
             .connect(vars.anotherAccount)
             .setGuardian(vars.anotherAccount.address),
-        ).to.be.revertedWith('LOSSLESS: unauthorized');
+        ).to.be.revertedWith('LOSSLESS: not lossless admin');
       });
     });
 
@@ -49,10 +49,20 @@ describe('TreasuryProtectionStrategy', () => {
       await protection.guardian
         .connect(vars.lssAdmin)
         .verifyToken(vars.erc20s[0].address);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[1].address);
 
       await protection.guardian
         .connect(vars.admin)
         .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
+
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(
+          vars.erc20s[1].address,
+          vars.oneMoreAccount.address,
+        );
 
       await vars.losslessController
         .connect(vars.lssAdmin)
@@ -73,7 +83,21 @@ describe('TreasuryProtectionStrategy', () => {
               vars.initialHolder.address,
               [vars.recipient.address],
             ),
-        ).to.be.revertedWith('LOSSLESS: unauthorized');
+        ).to.be.revertedWith('LOSSLESS: not protection admin');
+      });
+    });
+
+    describe('when sender is protection admin of another token', () => {
+      it('should revert', async () => {
+        await expect(
+          protection.treasuryProtectionStrategy
+            .connect(vars.oneMoreAccount)
+            .setProtectedAddress(
+              vars.erc20s[0].address,
+              vars.initialHolder.address,
+              [vars.recipient.address],
+            ),
+        ).to.be.revertedWith('LOSSLESS: not protection admin');
       });
     });
 
@@ -202,7 +226,6 @@ describe('TreasuryProtectionStrategy', () => {
       await protection.guardian
         .connect(vars.lssAdmin)
         .verifyToken(vars.erc20s[1].address);
-
       await protection.guardian
         .connect(vars.lssAdmin)
         .verifyToken(vars.erc20s[2].address);
@@ -212,7 +235,10 @@ describe('TreasuryProtectionStrategy', () => {
         .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
       await protection.guardian
         .connect(vars.admin)
-        .setProtectionAdmin(vars.erc20s[1].address, vars.guardianAdmin.address);
+        .setProtectionAdmin(
+          vars.erc20s[1].address,
+          vars.oneMoreAccount.address,
+        );
       await protection.guardian
         .connect(vars.admin)
         .setProtectionAdmin(vars.erc20s[2].address, vars.guardianAdmin.address);
@@ -249,7 +275,7 @@ describe('TreasuryProtectionStrategy', () => {
           true,
         );
       await protection.treasuryProtectionStrategy
-        .connect(vars.guardianAdmin)
+        .connect(vars.oneMoreAccount)
         .setProtectedAddress(
           vars.erc20s[1].address,
           vars.initialHolder.address,
@@ -281,7 +307,20 @@ describe('TreasuryProtectionStrategy', () => {
               vars.oneMoreAccount.address,
               vars.initialHolder.address,
             ]),
-        ).to.be.revertedWith('LOSSLESS: unauthorized');
+        ).to.be.revertedWith('LOSSLESS: not protection admin');
+      });
+    });
+
+    describe('when sender is protection admin of another token', () => {
+      it('should revert', async () => {
+        await expect(
+          protection.treasuryProtectionStrategy
+            .connect(vars.oneMoreAccount)
+            .removeProtectedAddresses(vars.erc20s[0].address, [
+              vars.oneMoreAccount.address,
+              vars.initialHolder.address,
+            ]),
+        ).to.be.revertedWith('LOSSLESS: not protection admin');
       });
     });
 
@@ -379,7 +418,7 @@ describe('TreasuryProtectionStrategy', () => {
         ).to.be.equal(true);
 
         await protection.treasuryProtectionStrategy
-          .connect(vars.guardianAdmin)
+          .connect(vars.oneMoreAccount)
           .removeProtectedAddresses(vars.erc20s[1].address, [
             vars.initialHolder.address,
           ]);

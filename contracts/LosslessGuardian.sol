@@ -42,22 +42,22 @@ contract LosslessGuardian {
     }
 
     modifier onlyLosslessAdmin() {
-        require(msg.sender == lossless.admin(),"LOSSLESS: unauthorized");
+        require(msg.sender == lossless.admin(),"LOSSLESS: not lossless admin");
         _;
     }
 
     modifier onlyVerifiedStrategy() {
-        require(verifiedStrategies[msg.sender], "LOSSLESS: unauthorized");
+        require(verifiedStrategies[msg.sender], "LOSSLESS: strategy not verified");
         _;
     }
 
     modifier onlyVerifiedToken(address token) {
-        require(verifiedTokens[token], "LOSSLESS: unauthorized");
+        require(verifiedTokens[token], "LOSSLESS: token not verified");
         _;
     }
 
     modifier onlyVerifiedAddress(address token, address addressToCheck) {
-        require(verifiedAddresses[token].verified[addressToCheck], "LOSSLESS: not verified");
+        require(verifiedAddresses[token].verified[addressToCheck], "LOSSLESS: address not verified");
         _;
     }
 
@@ -85,7 +85,7 @@ contract LosslessGuardian {
     }
 
     function setProtectionAdmin(address token, address admin) public onlyVerifiedToken(token) {
-        require(ILERC20(token).getAdmin() == msg.sender, "LOSSLESS: unauthorized");
+        require(ILERC20(token).getAdmin() == msg.sender, "LOSSLESS: not token admin");
         protectionAdmin[token] = admin;
         emit ProtectionAdminSet(token, admin);
     }
