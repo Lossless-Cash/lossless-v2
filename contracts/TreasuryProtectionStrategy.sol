@@ -42,12 +42,14 @@ contract TreasuryProtectionStrategy {
         _;
     }
 
+    // @dev In case guardian is changed, this allows not to redeploy strategy and just update it.
     function setGuardian(address newGuardian) public {
         require(msg.sender == lossless.admin(), "LOSSLESS: not lossless admin");
         guardian = IGuardian(newGuardian);
         emit GuardianSet(newGuardian);
     }
 
+    // @dev Called by project owners it just sets a whitelist.
     function setProtectedAddress(address token, address protectedAddress, address[] calldata whitelist) public onlyProtectionAdmin(token) {
         for(uint8 i = 0; i < whitelist.length; i++) {
             protectedAddresses[token].protection[protectedAddress].whitelist[whitelist[i]] = true;

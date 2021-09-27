@@ -22,9 +22,11 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
         bool isProtected;
         address strategy;
     }
+
     struct Protections {
         mapping(address => Protection) protections;
     }
+
     mapping(address => Protections) tokenProtections;
 
     event AdminChanged(address indexed previousAdmin, address indexed newAdmin);
@@ -95,11 +97,16 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
 
     // --- GUARD ---
 
+    // @notice Set a guardian contract.
+    // @dev guardian contract must be trusted as it has some access rights and can modify controller's state.
     function setGuardian(address newGuardian) public onlyLosslessAdmin whenNotPaused {
         emit GuardianSet(address(guardian), newGuardian);
         guardian = newGuardian;
     }
 
+    // @notice Sets protection for an address with the choosen strategy.
+    // @dev Strategies are verified in the guardian contract.
+    // @dev This call is initiated from a strategy, but guardian proxies it.
     function setProtectedAddress(address token, address protectedAddresss, address strategy) external onlyGuardian whenNotPaused {
         Protection storage protection = tokenProtections[token].protections[protectedAddresss];
         protection.isProtected = true;
@@ -107,6 +114,9 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
         emit ProtectedAddressSet(token, protectedAddresss, strategy);
     }
 
+    // @notice Remove the protectio from the address.
+    // @dev Strategies are verified in the guardian contract.
+    // @dev This call is initiated from a strategy, but guardian proxies it.
     function removeProtectedAddress(address token, address protectedAddresss) external onlyGuardian whenNotPaused {
         delete tokenProtections[token].protections[protectedAddresss];
         emit RemovedProtectedAddress(token, protectedAddresss);
@@ -114,6 +124,8 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
 
     // --- BEFORE HOOKS ---
 
+    // @notice If address is protected, transfer validation rules has to be run inside the strategy.
+    // @dev isTransferAllowed reverts in case transfer can not be done by the defined rules.
     function beforeTransfer(address sender, address recipient, uint256 amount) external {
         if (tokenProtections[_msgSender()].protections[sender].isProtected) {
             IProtectionStrategy(tokenProtections[_msgSender()].protections[sender].strategy)
@@ -121,6 +133,8 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
         }
     }
 
+    // @notice If address is protected, transfer validation rules has to be run inside the strategy.
+    // @dev isTransferAllowed reverts in case transfer can not be done by the defined rules.
     function beforeTransferFrom(address msgSender, address sender, address recipient, uint256 amount) external {
         if (tokenProtections[_msgSender()].protections[sender].isProtected) {
             IProtectionStrategy(tokenProtections[_msgSender()].protections[sender].strategy)

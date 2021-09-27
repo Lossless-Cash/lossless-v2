@@ -50,22 +50,30 @@ contract LiquidityProtectionStrategy {
         _;
     }
 
+    // @dev In case guardian is changed, this allows not to redeploy strategy and just update it.
     function setGuardian(address newGuardian) public {
         require(msg.sender == lossless.admin(), "LOSSLESS: not lossless admin");
         guardian = IGuardian(newGuardian);
         emit GuardianSet(newGuardian);
     }
 
+    // @param token Project token, the protection will be scoped inside of this token transfers.
+    // @param protectedAddress Address to apply the limits to.
+    // @param periodsInBlocks Limit period described in blocks. Each item in the list represents a different limit.
+    // @param amountsPerPeriod A list of max amounts that can be transfered in the coressponding period.
+    // @param startblocks A list of item that shows when each of the limits should be activated. Desribed in block.
+    // @dev This method allows setting 0...N limits to 0...N addresses.
+    // @dev Each item on the same index in periodsInBlocks, amountsPerPeriod, startblocks represents a different variable of the same limit.
     function setLimits(
         address token,
-        address[] calldata guardlist,
+        address[] calldata protectedAddress,
         uint256[] calldata periodsInBlocks,
         uint256[] calldata amountsPerPeriod,
         uint256[] calldata startblocks
     ) public onlyProtectionAdmin(token) {
-        for(uint8 i = 0; i < guardlist.length; i++) {
-            Limit[] storage limits = protection[token].limits[guardlist[i]];
-            guardian.setProtectedAddress(token, guardlist[i], address(this));
+        for(uint8 i = 0; i < protectedAddress.length; i++) {
+            Limit[] storage limits = protection[token].limits[protectedAddress[i]];
+            guardian.setProtectedAddress(token, protectedAddress[i], address(this));
 
             for(uint8 j = 0; j < periodsInBlocks.length; j ++) {
                 Limit memory limit;
@@ -85,6 +93,8 @@ contract LiquidityProtectionStrategy {
         }
     }
 
+    // @dev pausing is just adding a limit with amount 0 in the front on the limits array.
+    // @dev we need to keep it at the front to reduce the gas costs of iterating through the array.
     function pause(address token, address protectedAddress) public onlyProtectionAdmin(token) {
         require(lossless.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
         Limit[] storage limits = protection[token].limits[protectedAddress];
@@ -98,6 +108,8 @@ contract LiquidityProtectionStrategy {
         emit Paused(token, protectedAddress);
     }
 
+    // @dev removing the first limit in the array in case it is 0.
+    // @dev in case project sets a 0 limit as the first limit's array element, this would allow removing it.
     function unpause(address token, address protectedAddress) public onlyProtectionAdmin(token) { 
         require(lossless.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
         Limit[] storage limits = protection[token].limits[protectedAddress];
@@ -110,6 +122,8 @@ contract LiquidityProtectionStrategy {
         emit Unpaused(token, protectedAddress);
     }
 
+    // @dev Limit is reset every period.
+    // @dev Every period has it's own amountLeft which gets decreased on every transfer.
     function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external {
         require(msg.sender == address(lossless), "LOSSLESS: not lossless controller");
         Limit[] storage limits = protection[token].limits[sender];
