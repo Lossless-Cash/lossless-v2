@@ -31,16 +31,6 @@ describe('TreasuryProtectionStrategy', () => {
           await protection.treasuryProtectionStrategy.guardian(),
         ).to.be.equal(vars.anotherAccount.address);
       });
-
-      it('should emit GuardianSet event', async () => {
-        await expect(
-          protection.treasuryProtectionStrategy
-            .connect(vars.lssAdmin)
-            .setGuardian(vars.anotherAccount.address),
-        )
-          .to.emit(protection.treasuryProtectionStrategy, 'GuardianSet')
-          .withArgs(vars.anotherAccount.address);
-      });
     });
   });
 
@@ -48,10 +38,10 @@ describe('TreasuryProtectionStrategy', () => {
     beforeEach(async () => {
       await protection.guardian
         .connect(vars.lssAdmin)
-        .verifyToken(vars.erc20s[0].address);
+        .verifyToken(vars.erc20s[0].address, true);
       await protection.guardian
         .connect(vars.lssAdmin)
-        .verifyToken(vars.erc20s[1].address);
+        .verifyToken(vars.erc20s[1].address, true);
 
       await protection.guardian
         .connect(vars.admin)
@@ -70,7 +60,10 @@ describe('TreasuryProtectionStrategy', () => {
 
       await protection.guardian
         .connect(vars.lssAdmin)
-        .verifyStrategies([protection.treasuryProtectionStrategy.address]);
+        .verifyStrategies(
+          [protection.treasuryProtectionStrategy.address],
+          true,
+        );
     });
 
     describe('when sender is not protection admin', () => {
@@ -161,11 +154,11 @@ describe('TreasuryProtectionStrategy', () => {
       it('should not affect other tokens', async () => {
         await protection.guardian
           .connect(vars.lssAdmin)
-          .verifyToken(vars.erc20s[1].address);
+          .verifyToken(vars.erc20s[1].address, true);
 
         await protection.guardian
           .connect(vars.lssAdmin)
-          .verifyToken(vars.erc20s[2].address);
+          .verifyToken(vars.erc20s[2].address, true);
 
         await protection.guardian
           .connect(vars.admin)
@@ -222,13 +215,13 @@ describe('TreasuryProtectionStrategy', () => {
     beforeEach(async () => {
       await protection.guardian
         .connect(vars.lssAdmin)
-        .verifyToken(vars.erc20s[0].address);
+        .verifyToken(vars.erc20s[0].address, true);
       await protection.guardian
         .connect(vars.lssAdmin)
-        .verifyToken(vars.erc20s[1].address);
+        .verifyToken(vars.erc20s[1].address, true);
       await protection.guardian
         .connect(vars.lssAdmin)
-        .verifyToken(vars.erc20s[2].address);
+        .verifyToken(vars.erc20s[2].address, true);
 
       await protection.guardian
         .connect(vars.admin)
@@ -249,7 +242,10 @@ describe('TreasuryProtectionStrategy', () => {
 
       await protection.guardian
         .connect(vars.lssAdmin)
-        .verifyStrategies([protection.treasuryProtectionStrategy.address]);
+        .verifyStrategies(
+          [protection.treasuryProtectionStrategy.address],
+          true,
+        );
 
       await protection.guardian
         .connect(vars.lssAdmin)
@@ -449,13 +445,13 @@ describe('TreasuryProtectionStrategy', () => {
     beforeEach(async () => {
       await protection.guardian
         .connect(vars.lssAdmin)
-        .verifyToken(vars.erc20s[0].address);
+        .verifyToken(vars.erc20s[0].address, true);
       await protection.guardian
         .connect(vars.lssAdmin)
-        .verifyToken(vars.erc20s[1].address);
+        .verifyToken(vars.erc20s[1].address, true);
       await protection.guardian
         .connect(vars.lssAdmin)
-        .verifyToken(vars.erc20s[2].address);
+        .verifyToken(vars.erc20s[2].address, true);
       await protection.guardian
         .connect(vars.admin)
         .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
@@ -472,7 +468,10 @@ describe('TreasuryProtectionStrategy', () => {
 
       await protection.guardian
         .connect(vars.lssAdmin)
-        .verifyStrategies([protection.treasuryProtectionStrategy.address]);
+        .verifyStrategies(
+          [protection.treasuryProtectionStrategy.address],
+          true,
+        );
 
       await protection.guardian
         .connect(vars.lssAdmin)
@@ -514,9 +513,15 @@ describe('TreasuryProtectionStrategy', () => {
         await vars.erc20s[0]
           .connect(vars.initialHolder)
           .transfer(vars.recipient.address, 10);
+
+        await vars.erc20s[0]
+          .connect(vars.initialHolder)
+          .transfer(vars.recipient.address, 10);
+
         await vars.erc20s[0]
           .connect(vars.recipient)
           .transfer(vars.anotherAccount.address, 10);
+
         expect(
           await vars.erc20s[0].balanceOf(vars.anotherAccount.address),
         ).to.be.equal(10);
@@ -526,6 +531,7 @@ describe('TreasuryProtectionStrategy', () => {
         await vars.erc20s[1]
           .connect(vars.anotherAccount)
           .transfer(vars.recipient.address, 10);
+
         await vars.erc20s[1]
           .connect(vars.anotherAccount)
           .transfer(vars.initialHolder.address, 10);
@@ -549,6 +555,138 @@ describe('TreasuryProtectionStrategy', () => {
           vars.erc20s[1]
             .connect(vars.anotherAccount)
             .transfer(vars.oneMoreAccount.address, 101),
+        ).to.be.revertedWith('LOSSLESS: not whitelisted');
+      });
+    });
+  });
+
+  describe('LERC20.transferFrom', () => {
+    beforeEach(async () => {
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[0].address, true);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[1].address, true);
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[2].address, true);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[1].address, vars.guardianAdmin.address);
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[2].address, vars.guardianAdmin.address);
+
+      await vars.losslessController
+        .connect(vars.lssAdmin)
+        .setGuardian(protection.guardian.address);
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyStrategies(
+          [protection.treasuryProtectionStrategy.address],
+          true,
+        );
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[0].address,
+          vars.initialHolder.address,
+          true,
+        );
+      await protection.treasuryProtectionStrategy
+        .connect(vars.guardianAdmin)
+        .setProtectedAddress(
+          vars.erc20s[0].address,
+          vars.initialHolder.address,
+          [vars.recipient.address, vars.anotherAccount.address],
+        );
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyAddress(
+          vars.erc20s[1].address,
+          vars.anotherAccount.address,
+          true,
+        );
+      await protection.treasuryProtectionStrategy
+        .connect(vars.guardianAdmin)
+        .setProtectedAddress(
+          vars.erc20s[1].address,
+          vars.anotherAccount.address,
+          [vars.recipient.address, vars.initialHolder.address],
+        );
+
+      await vars.erc20s[1]
+        .connect(vars.initialHolder)
+        .transfer(vars.anotherAccount.address, 100);
+      await vars.erc20s[0]
+        .connect(vars.initialHolder)
+        .approve(vars.oneMoreAccount.address, 100);
+      await vars.erc20s[0]
+        .connect(vars.anotherAccount)
+        .approve(vars.oneMoreAccount.address, 100);
+      await vars.erc20s[1]
+        .connect(vars.initialHolder)
+        .approve(vars.oneMoreAccount.address, 100);
+      await vars.erc20s[1]
+        .connect(vars.anotherAccount)
+        .approve(vars.oneMoreAccount.address, 100);
+    });
+
+    describe('when transfering to whitelisted', async () => {
+      it('should suceed for token 1', async () => {
+        await vars.erc20s[0]
+          .connect(vars.oneMoreAccount)
+          .transferFrom(vars.initialHolder.address, vars.recipient.address, 10);
+
+        expect(
+          await vars.erc20s[0].balanceOf(vars.recipient.address),
+        ).to.be.equal(10);
+      });
+
+      it('should suceed for token 2', async () => {
+        await vars.erc20s[1]
+          .connect(vars.oneMoreAccount)
+          .transferFrom(
+            vars.anotherAccount.address,
+            vars.recipient.address,
+            10,
+          );
+
+        expect(
+          await vars.erc20s[1].balanceOf(vars.recipient.address),
+        ).to.be.equal(10);
+      });
+    });
+
+    describe('when transfering not to whitelisted', async () => {
+      it('should revert for token 1', async () => {
+        await expect(
+          vars.erc20s[0]
+            .connect(vars.oneMoreAccount)
+            .transferFrom(
+              vars.initialHolder.address,
+              vars.oneMoreAccount.address,
+              101,
+            ),
+        ).to.be.revertedWith('LOSSLESS: not whitelisted');
+      });
+
+      it('should revert for token 2', async () => {
+        await expect(
+          vars.erc20s[1]
+            .connect(vars.oneMoreAccount)
+            .transferFrom(
+              vars.anotherAccount.address,
+              vars.oneMoreAccount.address,
+              101,
+            ),
         ).to.be.revertedWith('LOSSLESS: not whitelisted');
       });
     });

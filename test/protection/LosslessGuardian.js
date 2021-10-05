@@ -28,7 +28,7 @@ describe('LosslessGuardian', () => {
       it('should revert', async () => {
         await protection.guardian
           .connect(vars.lssAdmin)
-          .verifyToken(vars.erc20s[0].address);
+          .verifyToken(vars.erc20s[0].address, true);
 
         await expect(
           protection.guardian
@@ -45,7 +45,7 @@ describe('LosslessGuardian', () => {
       beforeEach(async () => {
         await protection.guardian
           .connect(vars.lssAdmin)
-          .verifyToken(vars.erc20s[0].address);
+          .verifyToken(vars.erc20s[0].address, true);
       });
 
       it('should succeed', async () => {
@@ -77,249 +77,296 @@ describe('LosslessGuardian', () => {
   });
 
   describe('verifyStrategies', () => {
-    describe('when sender is not lossless admin', () => {
-      it('should revert', async () => {
-        await expect(
-          protection.guardian
-            .connect(vars.guardianAdmin)
-            .verifyStrategies([
-              protection.treasuryProtectionStrategy.address,
-              protection.liquidityProtectionStrategy.address,
-            ]),
-        ).to.be.revertedWith('LOSSLESS: not lossless admin');
-      });
-    });
-
-    describe('when sender is lossless admin', () => {
-      it('should succedd', async () => {
-        await protection.guardian
-          .connect(vars.lssAdmin)
-          .verifyStrategies([
-            protection.treasuryProtectionStrategy.address,
-            protection.liquidityProtectionStrategy.address,
-          ]);
-
-        expect(
-          await protection.guardian.verifiedStrategies(
-            protection.treasuryProtectionStrategy.address,
-          ),
-        ).to.be.equal(true);
-        expect(
-          await protection.guardian.verifiedStrategies(
-            protection.liquidityProtectionStrategy.address,
-          ),
-        ).to.be.equal(true);
+    describe('set to true', () => {
+      describe('when sender is not lossless admin', () => {
+        it('should revert', async () => {
+          await expect(
+            protection.guardian
+              .connect(vars.guardianAdmin)
+              .verifyStrategies(
+                [
+                  protection.treasuryProtectionStrategy.address,
+                  protection.liquidityProtectionMultipleLimitsStrategy.address,
+                ],
+                true,
+              ),
+          ).to.be.revertedWith('LOSSLESS: not lossless admin');
+        });
       });
 
-      it('should emit StrategyVerified events', async () => {
-        await expect(
-          protection.guardian
-            .connect(vars.lssAdmin)
-            .verifyStrategies([
-              protection.treasuryProtectionStrategy.address,
-              protection.liquidityProtectionStrategy.address,
-            ]),
-        )
-          .to.emit(protection.guardian, 'StrategyVerified')
-          .withArgs(protection.treasuryProtectionStrategy.address);
-
-        await expect(
-          protection.guardian
-            .connect(vars.lssAdmin)
-            .verifyStrategies([
-              protection.treasuryProtectionStrategy.address,
-              protection.liquidityProtectionStrategy.address,
-            ]),
-        )
-          .to.emit(protection.guardian, 'StrategyVerified')
-          .withArgs(protection.liquidityProtectionStrategy.address);
-      });
-
-      describe('when sending empty array', () => {
+      describe('when sender is lossless admin', () => {
         it('should succedd', async () => {
-          await protection.guardian.connect(vars.lssAdmin).verifyStrategies([]);
+          await protection.guardian
+            .connect(vars.lssAdmin)
+            .verifyStrategies(
+              [
+                protection.treasuryProtectionStrategy.address,
+                protection.liquidityProtectionMultipleLimitsStrategy.address,
+              ],
+              true,
+            );
 
           expect(
             await protection.guardian.verifiedStrategies(
               protection.treasuryProtectionStrategy.address,
             ),
-          ).to.be.equal(false);
+          ).to.be.equal(true);
           expect(
             await protection.guardian.verifiedStrategies(
-              protection.liquidityProtectionStrategy.address,
-              [],
+              protection.liquidityProtectionMultipleLimitsStrategy.address,
             ),
-          ).to.be.equal(false);
+          ).to.be.equal(true);
+        });
+
+        it('should emit StrategyVerified events', async () => {
+          await expect(
+            protection.guardian
+              .connect(vars.lssAdmin)
+              .verifyStrategies(
+                [
+                  protection.treasuryProtectionStrategy.address,
+                  protection.liquidityProtectionMultipleLimitsStrategy.address,
+                ],
+                true,
+              ),
+          )
+            .to.emit(protection.guardian, 'StrategyVerified')
+            .withArgs(protection.treasuryProtectionStrategy.address, true);
+
+          await expect(
+            protection.guardian
+              .connect(vars.lssAdmin)
+              .verifyStrategies(
+                [
+                  protection.treasuryProtectionStrategy.address,
+                  protection.liquidityProtectionMultipleLimitsStrategy.address,
+                ],
+                true,
+              ),
+          )
+            .to.emit(protection.guardian, 'StrategyVerified')
+            .withArgs(
+              protection.liquidityProtectionMultipleLimitsStrategy.address,
+              true,
+            );
+        });
+
+        describe('when sending empty array', () => {
+          it('should succedd', async () => {
+            await protection.guardian
+              .connect(vars.lssAdmin)
+              .verifyStrategies([], true);
+
+            expect(
+              await protection.guardian.verifiedStrategies(
+                protection.treasuryProtectionStrategy.address,
+              ),
+            ).to.be.equal(false);
+            expect(
+              await protection.guardian.verifiedStrategies(
+                protection.liquidityProtectionMultipleLimitsStrategy.address,
+                [],
+              ),
+            ).to.be.equal(false);
+          });
         });
       });
     });
-  });
 
-  describe('removeStrategies', () => {
-    beforeEach(async () => {
-      await protection.guardian
-        .connect(vars.lssAdmin)
-        .verifyStrategies([
-          protection.treasuryProtectionStrategy.address,
-          protection.liquidityProtectionStrategy.address,
-        ]);
-    });
-
-    describe('when sender is not lossless admin', () => {
-      it('should revert', async () => {
-        await expect(
-          protection.guardian
-            .connect(vars.guardianAdmin)
-            .removeStrategies([
-              protection.treasuryProtectionStrategy.address,
-              protection.liquidityProtectionStrategy.address,
-            ]),
-        ).to.be.revertedWith('LOSSLESS: not lossless admin');
-      });
-    });
-
-    describe('when sender is lossless admin', () => {
-      it('should succedd', async () => {
+    describe('set to false', () => {
+      beforeEach(async () => {
         await protection.guardian
           .connect(vars.lssAdmin)
-          .removeStrategies([
-            protection.treasuryProtectionStrategy.address,
-            protection.liquidityProtectionStrategy.address,
-          ]);
-
-        expect(
-          await protection.guardian.verifiedStrategies(
-            protection.treasuryProtectionStrategy.address,
-          ),
-        ).to.be.equal(false);
-        expect(
-          await protection.guardian.verifiedStrategies(
-            protection.liquidityProtectionStrategy.address,
-          ),
-        ).to.be.equal(false);
+          .verifyStrategies(
+            [
+              protection.treasuryProtectionStrategy.address,
+              protection.liquidityProtectionMultipleLimitsStrategy.address,
+            ],
+            true,
+          );
       });
 
-      it('should emit StrategyRemoved events', async () => {
-        await expect(
-          protection.guardian
-            .connect(vars.lssAdmin)
-            .removeStrategies([
-              protection.treasuryProtectionStrategy.address,
-              protection.liquidityProtectionStrategy.address,
-            ]),
-        )
-          .to.emit(protection.guardian, 'StrategyRemoved')
-          .withArgs(protection.treasuryProtectionStrategy.address);
-
-        await expect(
-          protection.guardian
-            .connect(vars.lssAdmin)
-            .removeStrategies([
-              protection.treasuryProtectionStrategy.address,
-              protection.liquidityProtectionStrategy.address,
-            ]),
-        )
-          .to.emit(protection.guardian, 'StrategyRemoved')
-          .withArgs(protection.liquidityProtectionStrategy.address);
+      describe('when sender is not lossless admin', () => {
+        it('should revert', async () => {
+          await expect(
+            protection.guardian
+              .connect(vars.guardianAdmin)
+              .verifyStrategies(
+                [
+                  protection.treasuryProtectionStrategy.address,
+                  protection.liquidityProtectionMultipleLimitsStrategy.address,
+                ],
+                false,
+              ),
+          ).to.be.revertedWith('LOSSLESS: not lossless admin');
+        });
       });
 
-      describe('when sending empty array', () => {
+      describe('when sender is lossless admin', () => {
         it('should succedd', async () => {
-          await protection.guardian.connect(vars.lssAdmin).removeStrategies([]);
+          await protection.guardian
+            .connect(vars.lssAdmin)
+            .verifyStrategies(
+              [
+                protection.treasuryProtectionStrategy.address,
+                protection.liquidityProtectionMultipleLimitsStrategy.address,
+              ],
+              false,
+            );
 
           expect(
             await protection.guardian.verifiedStrategies(
               protection.treasuryProtectionStrategy.address,
             ),
-          ).to.be.equal(true);
+          ).to.be.equal(false);
           expect(
             await protection.guardian.verifiedStrategies(
-              protection.liquidityProtectionStrategy.address,
-              [],
+              protection.liquidityProtectionMultipleLimitsStrategy.address,
             ),
-          ).to.be.equal(true);
+          ).to.be.equal(false);
+        });
+
+        it('should emit StrategyVerified events', async () => {
+          await expect(
+            protection.guardian
+              .connect(vars.lssAdmin)
+              .verifyStrategies(
+                [
+                  protection.treasuryProtectionStrategy.address,
+                  protection.liquidityProtectionMultipleLimitsStrategy.address,
+                ],
+                false,
+              ),
+          )
+            .to.emit(protection.guardian, 'StrategyVerified')
+            .withArgs(protection.treasuryProtectionStrategy.address, false);
+
+          await expect(
+            protection.guardian
+              .connect(vars.lssAdmin)
+              .verifyStrategies(
+                [
+                  protection.treasuryProtectionStrategy.address,
+                  protection.liquidityProtectionMultipleLimitsStrategy.address,
+                ],
+                false,
+              ),
+          )
+            .to.emit(protection.guardian, 'StrategyVerified')
+            .withArgs(
+              protection.liquidityProtectionMultipleLimitsStrategy.address,
+              false,
+            );
+        });
+
+        describe('when sending empty array', () => {
+          it('should succedd', async () => {
+            await protection.guardian
+              .connect(vars.lssAdmin)
+              .verifyStrategies([], false);
+
+            expect(
+              await protection.guardian.verifiedStrategies(
+                protection.treasuryProtectionStrategy.address,
+              ),
+            ).to.be.equal(true);
+            expect(
+              await protection.guardian.verifiedStrategies(
+                protection.liquidityProtectionMultipleLimitsStrategy.address,
+                [],
+              ),
+            ).to.be.equal(true);
+          });
         });
       });
     });
   });
 
   describe('verifyToken', () => {
-    describe('when sender is not lossless admin', () => {
-      it('should revert', async () => {
-        await expect(
-          protection.guardian
-            .connect(vars.guardianAdmin)
-            .verifyToken(vars.erc20s[0].address),
-        ).to.be.revertedWith('LOSSLESS: not lossless admin');
-      });
-    });
-
-    describe('when sender is lossless admin', () => {
-      it('should suceed', async () => {
-        expect(
-          await protection.guardian.verifiedTokens(vars.erc20s[0].address),
-        ).to.be.equal(false);
-        await protection.guardian
-          .connect(vars.lssAdmin)
-          .verifyToken(vars.erc20s[0].address);
-
-        expect(
-          await protection.guardian.verifiedTokens(vars.erc20s[0].address),
-        ).to.be.equal(true);
+    describe('set to true', () => {
+      describe('when sender is not lossless admin', () => {
+        it('should revert', async () => {
+          await expect(
+            protection.guardian
+              .connect(vars.guardianAdmin)
+              .verifyToken(vars.erc20s[0].address, true),
+          ).to.be.revertedWith('LOSSLESS: not lossless admin');
+        });
       });
 
-      it('should emit TokenVerified event', async () => {
-        await expect(
-          protection.guardian
+      describe('when sender is lossless admin', () => {
+        it('should suceed', async () => {
+          expect(
+            await protection.guardian.verifiedTokens(vars.erc20s[0].address),
+          ).to.be.equal(false);
+          await protection.guardian
             .connect(vars.lssAdmin)
-            .verifyToken(vars.erc20s[0].address),
-        )
-          .to.emit(protection.guardian, 'TokenVerified')
-          .withArgs(vars.erc20s[0].address);
+            .verifyToken(vars.erc20s[0].address, true);
+
+          expect(
+            await protection.guardian.verifiedTokens(vars.erc20s[0].address),
+          ).to.be.equal(true);
+        });
+
+        it('should emit TokenVerified event', async () => {
+          await expect(
+            protection.guardian
+              .connect(vars.lssAdmin)
+              .verifyToken(vars.erc20s[0].address, true),
+          )
+            .to.emit(protection.guardian, 'TokenVerified')
+            .withArgs(vars.erc20s[0].address, true);
+        });
       });
     });
-  });
 
-  describe('removeVerifiedToken', () => {
-    describe('when sender is not lossless admin', () => {
-      it('should revert', async () => {
-        await expect(
-          protection.guardian
-            .connect(vars.guardianAdmin)
-            .removeVerifiedToken(vars.erc20s[0].address),
-        ).to.be.revertedWith('LOSSLESS: not lossless admin');
-      });
-    });
-
-    describe('when sender is lossless admin', () => {
-      before(async () => {
-        await protection.guardian
-          .connect(vars.lssAdmin)
-          .verifyToken(vars.erc20s[0].address);
+    describe('set to false', () => {
+      describe('when sender is not lossless admin', () => {
+        it('should revert', async () => {
+          await expect(
+            protection.guardian
+              .connect(vars.guardianAdmin)
+              .verifyToken(vars.erc20s[0].address, false),
+          ).to.be.revertedWith('LOSSLESS: not lossless admin');
+        });
       });
 
-      it('should succedd', async () => {
-        await protection.guardian
-          .connect(vars.lssAdmin)
-          .removeVerifiedToken(vars.erc20s[0].address);
-        expect(
-          await protection.guardian.verifiedTokens(vars.erc20s[0].address),
-        ).to.be.equal(false);
-      });
-
-      it('should emit TokenVerificationRemoved event', async () => {
-        await expect(
-          protection.guardian
+      describe('when sender is lossless admin', () => {
+        before(async () => {
+          await protection.guardian
             .connect(vars.lssAdmin)
-            .removeVerifiedToken(vars.erc20s[0].address),
-        )
-          .to.emit(protection.guardian, 'TokenVerificationRemoved')
-          .withArgs(vars.erc20s[0].address);
+            .verifyToken(vars.erc20s[0].address, true);
+        });
+
+        it('should succedd', async () => {
+          await protection.guardian
+            .connect(vars.lssAdmin)
+            .verifyToken(vars.erc20s[0].address, false);
+          expect(
+            await protection.guardian.verifiedTokens(vars.erc20s[0].address),
+          ).to.be.equal(false);
+        });
+
+        it('should emit TokenVerified event', async () => {
+          await expect(
+            protection.guardian
+              .connect(vars.lssAdmin)
+              .verifyToken(vars.erc20s[0].address, false),
+          )
+            .to.emit(protection.guardian, 'TokenVerified')
+            .withArgs(vars.erc20s[0].address, false);
+        });
       });
     });
   });
 
   describe('verifyAddress', () => {
+    beforeEach(async () => {
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[0].address, true);
+    });
+
     describe('when sender is not lossless admin', async () => {
       it('should revert', async () => {
         await expect(
@@ -511,8 +558,10 @@ describe('LosslessGuardian', () => {
 
         await protection.guardian
           .connect(vars.lssAdmin)
-          .verifyStrategies([vars.anotherAccount.address]);
-
+          .verifyStrategies([vars.anotherAccount.address], true);
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyToken(vars.erc20s[0].address, true);
         await protection.guardian
           .connect(vars.lssAdmin)
           .verifyAddress(
@@ -578,6 +627,9 @@ describe('LosslessGuardian', () => {
 
           await protection.guardian
             .connect(vars.lssAdmin)
+            .verifyToken(vars.erc20s[1].address, true);
+          await protection.guardian
+            .connect(vars.lssAdmin)
             .verifyAddress(
               vars.erc20s[1].address,
               vars.anotherAccount.address,
@@ -617,7 +669,15 @@ describe('LosslessGuardian', () => {
 
       await protection.guardian
         .connect(vars.lssAdmin)
-        .verifyStrategies([vars.anotherAccount.address]);
+        .verifyStrategies([vars.anotherAccount.address], true);
+
+      await protection.guardian
+        .connect(vars.lssAdmin)
+        .verifyToken(vars.erc20s[0].address, true);
+
+      await protection.guardian
+        .connect(vars.admin)
+        .setProtectionAdmin(vars.erc20s[0].address, vars.admin.address);
 
       await protection.guardian
         .connect(vars.lssAdmin)
@@ -645,7 +705,7 @@ describe('LosslessGuardian', () => {
               vars.erc20s[0].address,
               vars.anotherAccount.address,
             ),
-        ).to.be.revertedWith('LOSSLESS: strategy not verified');
+        ).to.be.revertedWith('LOSSLESS: unauthorized');
       });
     });
 
@@ -674,6 +734,10 @@ describe('LosslessGuardian', () => {
       });
 
       it('should not affect other tokens', async () => {
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyToken(vars.erc20s[2].address, true);
+
         await protection.guardian
           .connect(vars.lssAdmin)
           .verifyAddress(
@@ -706,6 +770,100 @@ describe('LosslessGuardian', () => {
 
         await protection.guardian
           .connect(vars.anotherAccount)
+          .removeProtectedAddresses(
+            vars.erc20s[1].address,
+            vars.anotherAccount.address,
+          );
+
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.anotherAccount.address,
+          ),
+        ).to.be.equal(true);
+
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[2].address,
+            vars.anotherAccount.address,
+          ),
+        ).to.be.equal(true);
+      });
+    });
+
+    describe('when sender is protection admin', () => {
+      it('should succeed', async () => {
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.anotherAccount.address,
+          ),
+        ).to.be.equal(true);
+
+        await protection.guardian
+          .connect(vars.anotherAccount)
+          .removeProtectedAddresses(
+            vars.erc20s[0].address,
+            vars.anotherAccount.address,
+          );
+
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.anotherAccount.address,
+          ),
+        ).to.be.equal(false);
+      });
+
+      it('should not affect other tokens', async () => {
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyToken(vars.erc20s[2].address, true);
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyAddress(
+            vars.erc20s[2].address,
+            vars.anotherAccount.address,
+            true,
+          );
+
+        await protection.guardian
+          .connect(vars.anotherAccount)
+          .setProtectedAddress(
+            vars.erc20s[2].address,
+            vars.anotherAccount.address,
+            protection.treasuryProtectionStrategy.address,
+          );
+
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.anotherAccount.address,
+          ),
+        ).to.be.equal(true);
+
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[2].address,
+            vars.anotherAccount.address,
+          ),
+        ).to.be.equal(true);
+
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyToken(vars.erc20s[1].address, true);
+        await protection.guardian
+          .connect(vars.admin)
+          .setProtectionAdmin(vars.erc20s[1].address, vars.admin.address);
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyAddress(
+            vars.erc20s[2].address,
+            vars.anotherAccount.address,
+            true,
+          );
+        await protection.guardian
+          .connect(vars.admin)
           .removeProtectedAddresses(
             vars.erc20s[1].address,
             vars.anotherAccount.address,

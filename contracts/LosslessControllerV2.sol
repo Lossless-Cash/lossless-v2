@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -16,18 +16,15 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     address public recoveryAdmin;
 
     // --- V2 VARIABLES ---
-    address public guardian;
-
     struct Protection {
         bool isProtected;
         address strategy;
     }
-
     struct Protections {
         mapping(address => Protection) protections;
     }
-
-    mapping(address => Protections) tokenProtections;
+    address public guardian;
+    mapping(address => Protections) private tokenProtections;
 
     event AdminChanged(address indexed previousAdmin, address indexed newAdmin);
     event RecoveryAdminChanged(address indexed previousAdmin, address indexed newAdmin);
@@ -40,17 +37,17 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     // --- MODIFIERS ---
 
     modifier onlyLosslessRecoveryAdmin() {
-        require(_msgSender() == recoveryAdmin, "LOSSLESS: must be recoveryAdmin");
+        require(msg.sender == recoveryAdmin, "LOSSLESS: must be recoveryAdmin");
         _;
     }
 
     modifier onlyLosslessAdmin() {
-        require(admin == _msgSender(), "LOSSLESS: must be admin");
+        require(admin == msg.sender, "LOSSLESS: must be admin");
         _;
     }
 
     modifier onlyGuardian() {
-        require(_msgSender() == address(guardian), "LOSSLESS: sender is not guardian");
+        require(msg.sender == address(guardian), "LOSSLESS: sender is not guardian");
         _;
     }
 
@@ -71,12 +68,12 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     // --- ADMINISTRATION ---
 
     function pause() public {
-        require(_msgSender() == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
+        require(msg.sender == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
         _pause();
     }    
     
     function unpause() public {
-        require(_msgSender() == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
+        require(msg.sender == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
         _unpause();
     }
 
@@ -100,7 +97,7 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     // @notice Set a guardian contract.
     // @dev guardian contract must be trusted as it has some access rights and can modify controller's state.
     function setGuardian(address newGuardian) public onlyLosslessAdmin whenNotPaused {
-        emit GuardianSet(address(guardian), newGuardian);
+        emit GuardianSet(guardian, newGuardian);
         guardian = newGuardian;
     }
 
@@ -124,21 +121,21 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
 
     // --- BEFORE HOOKS ---
 
-    // @notice If address is protected, transfer validation rules has to be run inside the strategy.
+    // @notice If address is protected, transfer validation rules have to be run inside the strategy.
     // @dev isTransferAllowed reverts in case transfer can not be done by the defined rules.
     function beforeTransfer(address sender, address recipient, uint256 amount) external {
-        if (tokenProtections[_msgSender()].protections[sender].isProtected) {
-            IProtectionStrategy(tokenProtections[_msgSender()].protections[sender].strategy)
-                .isTransferAllowed(_msgSender(), sender, recipient, amount);
+        if (tokenProtections[msg.sender].protections[sender].isProtected) {
+            IProtectionStrategy(tokenProtections[msg.sender].protections[sender].strategy)
+                .isTransferAllowed(msg.sender , sender, recipient, amount);
         }
     }
 
-    // @notice If address is protected, transfer validation rules has to be run inside the strategy.
+    // @notice If address is protected, transfer validation rules have to be run inside the strategy.
     // @dev isTransferAllowed reverts in case transfer can not be done by the defined rules.
     function beforeTransferFrom(address msgSender, address sender, address recipient, uint256 amount) external {
-        if (tokenProtections[_msgSender()].protections[sender].isProtected) {
-            IProtectionStrategy(tokenProtections[_msgSender()].protections[sender].strategy)
-                .isTransferAllowed(_msgSender(), sender, recipient, amount);
+        if (tokenProtections[msg.sender].protections[sender].isProtected) {
+            IProtectionStrategy(tokenProtections[msg.sender].protections[sender].strategy)
+                .isTransferAllowed(msg.sender, sender, recipient, amount);
         }
     }
 

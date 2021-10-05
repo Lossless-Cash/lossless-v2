@@ -88,10 +88,19 @@ const deployProtection = async (losslessController) => {
   const LosslessGuardian = await ethers.getContractFactory('LosslessGuardian');
   const guardian = await LosslessGuardian.deploy(losslessController.address);
 
-  const LiquidityProtectionStrategy = await ethers.getContractFactory(
-    'LiquidityProtectionStrategy',
+  const LiquidityProtectionMultipleLimitsStrategy = await ethers.getContractFactory(
+    'LiquidityProtectionMultipleLimitsStrategy',
   );
-  const liquidityProtectionStrategy = await LiquidityProtectionStrategy.deploy(
+
+  const liquidityProtectionMultipleLimitsStrategy = await LiquidityProtectionMultipleLimitsStrategy.deploy(
+    guardian.address,
+    losslessController.address,
+  );
+
+  const LiquidityProtectionSingleLimitStrategy = await ethers.getContractFactory(
+    'LiquidityProtectionSingleLimitStrategy',
+  );
+  const liquidityProtectionSingleLimitStrategy = await LiquidityProtectionSingleLimitStrategy.deploy(
     guardian.address,
     losslessController.address,
   );
@@ -104,7 +113,12 @@ const deployProtection = async (losslessController) => {
     losslessController.address,
   );
 
-  return { guardian, liquidityProtectionStrategy, treasuryProtectionStrategy };
+  return {
+    guardian,
+    liquidityProtectionMultipleLimitsStrategy,
+    treasuryProtectionStrategy,
+    liquidityProtectionSingleLimitStrategy,
+  };
 };
 
 async function mineBlocks(count) {

@@ -1,55 +1,23 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity 0.8.9;
 
 import "hardhat/console.sol";
-
-interface ILosslessController {
-    function admin() external returns(address);
-}
-
-interface IGuardian {
-    function protectionAdmin(address token) external returns (address);
-
-    function setProtectedAddress(address token, address guardedAddress, address strategy) external;
-
-    function removeProtectedAddresses(address token, address protectedAddress) external;
-}
+import "./StrategyBase.sol";
 
 error NotAllowed(address sender, uint256 amount);
 
-contract TreasuryProtectionStrategy {
+contract TreasuryProtectionStrategy is StrategyBase {
     struct Whitelist {
         mapping(address => bool) whitelist;
     }
-
     struct Protection {
         mapping(address => Whitelist) protection; 
     }
-
     mapping(address => Protection) private protectedAddresses;
-    IGuardian public guardian;
-    ILosslessController public lossless;
 
-    event GuardianSet(address indexed newGuardian);
+    constructor(address _guardian, address _lossless) StrategyBase(_guardian, _lossless) {}
 
-    constructor(address _guardian, address _lossless) {
-        guardian = IGuardian(_guardian);
-        lossless = ILosslessController(_lossless);
-    }
-
-    modifier onlyProtectionAdmin(address token) {
-        require(msg.sender == guardian.protectionAdmin(token), "LOSSLESS: not protection admin");
-        _;
-    }
-
-    // @dev In case guardian is changed, this allows not to redeploy strategy and just update it.
-    function setGuardian(address newGuardian) public {
-        require(msg.sender == lossless.admin(), "LOSSLESS: not lossless admin");
-        guardian = IGuardian(newGuardian);
-        emit GuardianSet(newGuardian);
-    }
-
-    // @dev Called by project owners it just sets a whitelist.
+    // @dev Called by project owners. Sets a whitelist for protected address.
     function setProtectedAddress(address token, address protectedAddress, address[] calldata whitelist) public onlyProtectionAdmin(token) {
         for(uint8 i = 0; i < whitelist.length; i++) {
             protectedAddresses[token].protection[protectedAddress].whitelist[whitelist[i]] = true;
@@ -58,6 +26,7 @@ contract TreasuryProtectionStrategy {
         guardian.setProtectedAddress(token, protectedAddress, address(this));
     }
 
+    // @dev Remove whitelist for protected addresss.
     function removeProtectedAddresses(address token, address[] calldata addressesToRemove) public onlyProtectionAdmin(token) {
         for(uint8 i = 0; i < addressesToRemove.length; i++) {
             delete protectedAddresses[token].protection[addressesToRemove[i]];
@@ -65,11 +34,10 @@ contract TreasuryProtectionStrategy {
         }
     }
 
+    // @dev Called by controller to check if transfer is allowed to happen.
     function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external view {
         require(isAddressWhitelisted(token, sender, recipient), "LOSSLESS: not whitelisted");
     }
-
-    // --- VIEWS ---
 
     function isAddressWhitelisted(address token, address protectedAddress, address whitelistedAddress) public view returns(bool){
         return protectedAddresses[token].protection[protectedAddress].whitelist[whitelistedAddress];

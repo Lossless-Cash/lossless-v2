@@ -1,31 +1,15 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.9;
 
 import "hardhat/console.sol";
+import "./StrategyBase.sol";
 
-interface ILosslessController {
-    function admin() external returns(address);
-
-    function isAddressProtected(address token, address protectedAddress) external view returns (bool);
-}
-
-interface IGuardian {
-    function protectionAdmin(address token) external returns (address);
-
-    function setProtectedAddress(address token, address guardedAddress, address strategy) external;
-
-    function removeProtectedAddresses(address token, address protectedAddress) external;
-}
-
-error NotAllowed(address sender, uint256 amount);
-
-contract LiquidityProtectionStrategy {
+contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
     struct Limit {
-        uint256 periodInBlocks;
+        uint32 periodInBlocks;
+        uint32 lastCheckpoint;
         uint256 amountPerPeriod;
-
         uint256 amountLeft;
-        uint256 lastCheckpoint;
     }
 
     struct Protection {
@@ -33,29 +17,8 @@ contract LiquidityProtectionStrategy {
     }
 
     mapping(address => Protection) private protection;
-    IGuardian public guardian;
-    ILosslessController public lossless;
 
-    event GuardianSet(address indexed newGuardian);
-    event Paused(address indexed token, address indexed protectedAddress);
-    event Unpaused(address indexed token, address indexed protectedAddress);
-
-    constructor(address _guardian, address _lossless) {
-        guardian = IGuardian(_guardian);
-        lossless = ILosslessController(_lossless);
-    }
-
-    modifier onlyProtectionAdmin(address token) {
-        require(msg.sender == guardian.protectionAdmin(token), "LOSSLESS: not protection admin");
-        _;
-    }
-
-    // @dev In case guardian is changed, this allows not to redeploy strategy and just update it.
-    function setGuardian(address newGuardian) public {
-        require(msg.sender == lossless.admin(), "LOSSLESS: not lossless admin");
-        guardian = IGuardian(newGuardian);
-        emit GuardianSet(newGuardian);
-    }
+    constructor(address _guardian, address _lossless) StrategyBase(_guardian, _lossless) {}
 
     // @param token Project token, the protection will be scoped inside of this token transfers.
     // @param protectedAddress Address to apply the limits to.
@@ -64,25 +27,48 @@ contract LiquidityProtectionStrategy {
     // @param startblocks A list of item that shows when each of the limits should be activated. Desribed in block.
     // @dev This method allows setting 0...N limits to 0...N addresses.
     // @dev Each item on the same index in periodsInBlocks, amountsPerPeriod, startblocks represents a different variable of the same limit.
+    function setLimitsBatched(
+        address token,
+        address[] calldata protectedAddresses,
+        uint32[] calldata periodsInBlocks,
+        uint256[] calldata amountsPerPeriod,
+        uint32[] calldata startblocks
+    ) public onlyProtectionAdmin(token) {
+        for(uint8 i = 0; i < protectedAddresses.length; i++) {
+            guardian.setProtectedAddress(token, protectedAddresses[i], address(this));
+            saveLimit(token, protectedAddresses[i], periodsInBlocks, amountsPerPeriod, startblocks);
+        }
+    }
+
+    // @dev params mostly as in batched
+    // @dev This method allows setting 0...N limit to 1 address.
+    // @dev Each item on the same index in periodsInBlocks, amountsPerPeriod, startblocks represents a different variable of the same limit.
     function setLimits(
         address token,
-        address[] calldata protectedAddress,
-        uint256[] calldata periodsInBlocks,
+        address protectedAddress,
+        uint32[] calldata periodsInBlocks,
         uint256[] calldata amountsPerPeriod,
-        uint256[] calldata startblocks
+        uint32[] calldata startblocks
     ) public onlyProtectionAdmin(token) {
-        for(uint8 i = 0; i < protectedAddress.length; i++) {
-            Limit[] storage limits = protection[token].limits[protectedAddress[i]];
-            guardian.setProtectedAddress(token, protectedAddress[i], address(this));
+        guardian.setProtectedAddress(token, protectedAddress, address(this));
+        saveLimit(token, protectedAddress, periodsInBlocks, amountsPerPeriod, startblocks);
+    }
 
-            for(uint8 j = 0; j < periodsInBlocks.length; j ++) {
-                Limit memory limit;
-                limit.periodInBlocks = periodsInBlocks[j];
-                limit.amountPerPeriod = amountsPerPeriod[j];
-                limit.lastCheckpoint = startblocks[i];
-                limit.amountLeft = amountsPerPeriod[j];
-                limits.push(limit);
-            }
+    function saveLimit(     
+        address token,   
+        address protectedAddress,
+        uint32[] calldata periodsInBlocks,
+        uint256[] calldata amountsPerPeriod,
+        uint32[] calldata startblocks
+    ) internal {
+        Limit[] storage limits = protection[token].limits[protectedAddress];
+        for(uint8 j = 0; j < periodsInBlocks.length; j ++) {
+            Limit memory limit;
+            limit.periodInBlocks = periodsInBlocks[j];
+            limit.amountPerPeriod = amountsPerPeriod[j];
+            limit.lastCheckpoint = startblocks[j];
+            limit.amountLeft = amountsPerPeriod[j];
+            limits.push(limit);
         }
     }
 
@@ -93,8 +79,8 @@ contract LiquidityProtectionStrategy {
         }
     }
 
-    // @dev pausing is just adding a limit with amount 0 in the front on the limits array.
-    // @dev we need to keep it at the front to reduce the gas costs of iterating through the array.
+    // @dev Pausing is just adding a limit with amount 0 in the front on the limits array.
+    // @dev We need to keep it at the front to reduce the gas costs of iterating through the array.
     function pause(address token, address protectedAddress) public onlyProtectionAdmin(token) {
         require(lossless.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
         Limit[] storage limits = protection[token].limits[protectedAddress];
@@ -108,8 +94,8 @@ contract LiquidityProtectionStrategy {
         emit Paused(token, protectedAddress);
     }
 
-    // @dev removing the first limit in the array in case it is 0.
-    // @dev in case project sets a 0 limit as the first limit's array element, this would allow removing it.
+    // @dev Removing the first limit in the array in case it is 0.
+    // @dev In case project sets a 0 limit as the first limit's array element, this would allow removing it.
     function unpause(address token, address protectedAddress) public onlyProtectionAdmin(token) { 
         require(lossless.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
         Limit[] storage limits = protection[token].limits[protectedAddress];
@@ -125,7 +111,7 @@ contract LiquidityProtectionStrategy {
     // @dev Limit is reset every period.
     // @dev Every period has it's own amountLeft which gets decreased on every transfer.
     function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external {
-        require(msg.sender == address(lossless), "LOSSLESS: not lossless controller");
+        require(msg.sender == address(lossless), "LOSSLESS: not controller");
         Limit[] storage limits = protection[token].limits[sender];
         
         // Time period based limits checks
@@ -138,15 +124,13 @@ contract LiquidityProtectionStrategy {
             }
             // New period started, update checkpoint and reset amount
             else {
-                limit.lastCheckpoint = calculateUpdatedCheckpoint(limit.lastCheckpoint, limit.periodInBlocks, block.number);
+                limit.lastCheckpoint = calculateUpdatedCheckpoint(limit.lastCheckpoint, limit.periodInBlocks, uint32(block.number));
                 limit.amountLeft = calculateAmountLeft(amount, limit.amountPerPeriod);
             }
             
             require(limit.amountLeft > 0, "LOSSLESS: limit reached");
         }
     }
-
-    // --- HELPERS ---
 
     function calculateAmountLeft(uint256 amount, uint256 amountLeft) internal pure returns (uint256)  {
         if (amount >= amountLeft) {
@@ -156,9 +140,9 @@ contract LiquidityProtectionStrategy {
         }
     }
 
-    function calculateUpdatedCheckpoint(uint256 lastCheckpoint, uint256 periodInBlocks, uint256 blockNumber) internal pure returns(uint256) {
-        uint256 deltaBlocks = blockNumber - lastCheckpoint;
-        uint256 periodsInDelta = deltaBlocks / periodInBlocks;
+    function calculateUpdatedCheckpoint(uint32 lastCheckpoint, uint32 periodInBlocks, uint32 blockNumber) internal pure returns(uint32) {
+        uint32 deltaBlocks = blockNumber - lastCheckpoint;
+        uint32 periodsInDelta = deltaBlocks / periodInBlocks;
         return lastCheckpoint + (periodInBlocks * periodsInDelta);
     }
 
@@ -168,8 +152,6 @@ contract LiquidityProtectionStrategy {
         limitCopy.lastCheckpoint = limits[indexFrom].lastCheckpoint;
         limitCopy.amountLeft = limits[indexFrom].amountLeft;
     }
-
-    // --- VIEWS ---
 
     function getLimitsLength(address token, address protectedAddress) public view returns(uint256) {
         return protection[token].limits[protectedAddress].length;
