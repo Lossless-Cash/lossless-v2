@@ -6,12 +6,12 @@ async function main() {
 
   const erc20 = await LERC20.deploy(
     supply,
-    'TEST4',
-    'TEST4',
-    '0x0299a45a955d0A0C0E3E1c6056abfd7357801F10',
-    '0x0299a45a955d0A0C0E3E1c6056abfd7357801F10',
+    'Token1',
+    'T1',
+    '0xE87102C851C47dd4c6Ce2a0AB10a6D23E4380ce7',
+    '0xE87102C851C47dd4c6Ce2a0AB10a6D23E4380ce7',
     86400,
-    '0x0E067b7217B54aeB822A4E934eB0e364A2A91465',
+    '0x3E5f2374e10B134C8D035a5081da06E0Ea3EC210',
   );
 
   //   erc20.transfer(0x0299a45a955d0A0C0E3E1c6056abfd7357801F10, supply);

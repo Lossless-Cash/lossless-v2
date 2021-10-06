@@ -12,7 +12,7 @@ interface ILosslessController {
 interface IGuardian {
     function protectionAdmin(address token) external returns (address);
 
-    function setProtectedAddress(address token, address guardedAddress, address strategy) external;
+    function setProtectedAddress(address token, address guardedAddress) external;
 
     function removeProtectedAddresses(address token, address protectedAddress) external;
 }

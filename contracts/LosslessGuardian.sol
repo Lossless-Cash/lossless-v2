@@ -82,7 +82,7 @@ contract LosslessGuardian {
     function verifyAddress(address token, address verifiedAddress, bool value) public onlyLosslessAdmin onlyVerifiedToken(token) {
         verifiedAddresses[token].verified[verifiedAddress] = value;
         emit AddressVerified(token, verifiedAddress, value);
-    }
+    }   
 
     // @notice Token admin sets up another admin that is responsible for managing protection.
     function setProtectionAdmin(address token, address admin) public onlyVerifiedToken(token) {
@@ -92,8 +92,8 @@ contract LosslessGuardian {
     }
 
     // @dev This is called from strategy conctract and forwards that call to the controller.
-    function setProtectedAddress(address token, address guardedAddress, address strategy) external onlyVerifiedStrategy onlyVerifiedAddress(token, guardedAddress) {
-        lossless.setProtectedAddress(token, guardedAddress, strategy);
+    function setProtectedAddress(address token, address guardedAddress) external onlyVerifiedStrategy onlyVerifiedAddress(token, guardedAddress) {
+        lossless.setProtectedAddress(token, guardedAddress, msg.sender);
     }
     
     // @dev This is called from strategy conctract or protection admin and forwards that call to the controller.

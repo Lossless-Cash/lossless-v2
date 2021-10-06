@@ -6,8 +6,8 @@ import "./StrategyBase.sol";
 
 contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
     struct Limit {
-        uint32 periodInBlocks;
-        uint32 lastCheckpoint;
+        uint32 periodInBlocks;  
+        uint32 lastCheckpoint; 
         uint256 amountPerPeriod;
         uint256 amountLeft;
     }
@@ -34,7 +34,7 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
     ) public onlyProtectionAdmin(token) {
         for(uint8 i = 0; i < protectedAddresses.length; i++) {
             saveLimit(token, protectedAddresses[i], periodInBlocks, amountPerPeriod, startblock);
-            guardian.setProtectedAddress(token, protectedAddresses[i], address(this));
+            guardian.setProtectedAddress(token, protectedAddresses[i]);
         }
     }
 
@@ -49,7 +49,7 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
         uint32 startblock
     ) public onlyProtectionAdmin(token) {
         saveLimit(token, protectedAddress, periodInBlocks, amountPerPeriod, startblock);
-        guardian.setProtectedAddress(token, protectedAddress, address(this));
+        guardian.setProtectedAddress(token, protectedAddress);
     }
 
     function saveLimit(
@@ -73,8 +73,8 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
         }
     }
 
-    // @dev pausing is just adding a limit with amount 0 in the front on the limits array.
-    // @dev we need to keep it at the front to reduce the gas costs of iterating through the array.
+    // @dev Pausing is just adding a limit with amount 0.
+    // @dev This approach uses less gas than having a separate isPaused flag.
     function pause(address token, address protectedAddress) public onlyProtectionAdmin(token) {
         require(lossless.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
         Limit storage limit = protection[token].limits[protectedAddress];
@@ -91,7 +91,7 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
 
         // Time period based limits checks
         // Is transfer is in the same period ?
-        if (limit.lastCheckpoint + limit.periodInBlocks > block.number) {
+        if (limit.lastCheckpoint + limit.periodInBlocks > block.number) { 
             limit.amountLeft = calculateAmountLeft(amount, limit.amountLeft);
         }
         // New period started, update checkpoint and reset amount
@@ -115,13 +115,6 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
 
     function calculateUpdatedCheckpoint(uint32 lastCheckpoint, uint32 periodInBlocks, uint32 blockNumber) internal pure returns(uint32) {
         return lastCheckpoint + (periodInBlocks * ((blockNumber - lastCheckpoint) / periodInBlocks));
-    }
-
-    function cloneLimit(uint256 indexFrom, Limit[] memory limits) internal pure returns (Limit memory limitCopy)  {
-        limitCopy.periodInBlocks = limits[indexFrom].periodInBlocks;
-        limitCopy.amountPerPeriod = limits[indexFrom].amountPerPeriod;
-        limitCopy.lastCheckpoint = limits[indexFrom].lastCheckpoint;
-        limitCopy.amountLeft = limits[indexFrom].amountLeft;
     }
 
     // --- VIEWS ---

@@ -2,7 +2,7 @@ async function main() {
   const LosslessGuardian = await ethers.getContractFactory('LosslessGuardian');
 
   const guardian = await LosslessGuardian.deploy(
-    '0x0E067b7217B54aeB822A4E934eB0e364A2A91465',
+    '0x3E5f2374e10B134C8D035a5081da06E0Ea3EC210',
   );
 
   console.log(guardian.address);

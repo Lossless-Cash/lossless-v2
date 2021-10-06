@@ -35,7 +35,7 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
         uint32[] calldata startblocks
     ) public onlyProtectionAdmin(token) {
         for(uint8 i = 0; i < protectedAddresses.length; i++) {
-            guardian.setProtectedAddress(token, protectedAddresses[i], address(this));
+            guardian.setProtectedAddress(token, protectedAddresses[i]);
             saveLimit(token, protectedAddresses[i], periodsInBlocks, amountsPerPeriod, startblocks);
         }
     }
@@ -50,7 +50,7 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
         uint256[] calldata amountsPerPeriod,
         uint32[] calldata startblocks
     ) public onlyProtectionAdmin(token) {
-        guardian.setProtectedAddress(token, protectedAddress, address(this));
+        guardian.setProtectedAddress(token, protectedAddress);
         saveLimit(token, protectedAddress, periodsInBlocks, amountsPerPeriod, startblocks);
     }
 

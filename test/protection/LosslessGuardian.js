@@ -544,7 +544,6 @@ describe('LosslessGuardian', () => {
             .setProtectedAddress(
               vars.erc20s[0].address,
               vars.anotherAccount.address,
-              protection.treasuryProtectionStrategy.address,
             ),
         ).to.be.revertedWith('LOSSLESS: strategy not verified');
       });
@@ -579,7 +578,6 @@ describe('LosslessGuardian', () => {
               .setProtectedAddress(
                 vars.erc20s[0].address,
                 vars.oneMoreAccount.address,
-                protection.treasuryProtectionStrategy.address,
               ),
           ).to.be.revertedWith('LOSSLESS: address not verified');
         });
@@ -599,7 +597,6 @@ describe('LosslessGuardian', () => {
             .setProtectedAddress(
               vars.erc20s[0].address,
               vars.anotherAccount.address,
-              protection.treasuryProtectionStrategy.address,
             );
 
           expect(
@@ -640,7 +637,6 @@ describe('LosslessGuardian', () => {
             .setProtectedAddress(
               vars.erc20s[1].address,
               vars.anotherAccount.address,
-              protection.treasuryProtectionStrategy.address,
             );
 
           expect(
@@ -692,7 +688,6 @@ describe('LosslessGuardian', () => {
         .setProtectedAddress(
           vars.erc20s[0].address,
           vars.anotherAccount.address,
-          protection.treasuryProtectionStrategy.address,
         );
     });
 
@@ -751,7 +746,6 @@ describe('LosslessGuardian', () => {
           .setProtectedAddress(
             vars.erc20s[2].address,
             vars.anotherAccount.address,
-            protection.treasuryProtectionStrategy.address,
           );
 
         expect(
@@ -832,7 +826,6 @@ describe('LosslessGuardian', () => {
           .setProtectedAddress(
             vars.erc20s[2].address,
             vars.anotherAccount.address,
-            protection.treasuryProtectionStrategy.address,
           );
 
         expect(

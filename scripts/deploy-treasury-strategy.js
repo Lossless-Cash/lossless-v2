@@ -4,8 +4,8 @@ async function main() {
   );
 
   const strategy = await TreasuryProtectionStrategy.deploy(
-    '0xb561df98e00DF9Fa530848d7aA6beBa803a15DBD',
-    '0x0E067b7217B54aeB822A4E934eB0e364A2A91465',
+    '0xa71F756B42905c3F1d87a9F54656496052795F7a',
+    '0x3E5f2374e10B134C8D035a5081da06E0Ea3EC210',
   );
 
   console.log(strategy.address);

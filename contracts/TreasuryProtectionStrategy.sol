@@ -23,7 +23,7 @@ contract TreasuryProtectionStrategy is StrategyBase {
             protectedAddresses[token].protection[protectedAddress].whitelist[whitelist[i]] = true;
         }
 
-        guardian.setProtectedAddress(token, protectedAddress, address(this));
+        guardian.setProtectedAddress(token, protectedAddress);
     }
 
     // @dev Remove whitelist for protected addresss.
