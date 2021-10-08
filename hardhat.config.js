@@ -2,10 +2,10 @@ require('@nomiclabs/hardhat-waffle');
 
 require('@openzeppelin/hardhat-upgrades');
 // require('solidity-coverage');
-// require('hardhat-abi-exporter');
+require('hardhat-abi-exporter');
 // require('@nomiclabs/hardhat-etherscan');
 // require('@openzeppelin/hardhat-defender');
-// require('hardhat-gas-reporter');
+require('hardhat-gas-reporter');
 
 const {
   ROPSTEN_PRIVATE_KEY,
@@ -19,16 +19,13 @@ module.exports = {
   solidity: {
     compilers: [
       {
-        version: '0.8.0',
-      },
-      {
-        version: '0.5.16',
-      },
-      {
-        version: '0.4.18',
-      },
-      {
-        version: '0.6.6',
+        version: '0.8.9',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 1000,
+          },
+        },
       },
     ],
   },
@@ -44,7 +41,8 @@ module.exports = {
       },
     },
     ropsten: {
-      url: `https://ropsten.infura.io/v3/${INFURA_KEY}`,
+      url:
+        'https://speedy-nodes-nyc.moralis.io/6743a8ce6ffa15b496454e17/eth/ropsten',
       accounts: [`0x${ROPSTEN_PRIVATE_KEY}`],
     },
     rinkeby: {

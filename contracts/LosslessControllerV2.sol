@@ -1,23 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "hardhat/console.sol";
 
-interface LERC20 {
-    function totalSupply() external view returns (uint256);
-
-    function balanceOf(address account) external view returns (uint256);
-
-    function transfer(address recipient, uint256 amount) external returns (bool);
-
-    function allowance(address owner, address spender) external view returns (uint256);
-
-    function approve(address spender, uint256 amount) external returns (bool);
-
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+interface ProtectionStrategy {
+    function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external;
 }
 
 contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgradeable {
@@ -25,58 +15,80 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     address public admin;
     address public recoveryAdmin;
 
-    uint256 public reportLifetime;
-    uint256 public reportCount;
-    uint256 public stakeAmount;
-    LERC20 public losslessToken;
+    // --- V2 VARIABLES ---
 
-    // FIX
-    struct TokenReports {
-        mapping(address => uint256) reports;
+    address public guardian;
+    mapping(address => Protections) private tokenProtections;
+
+    struct Protection {
+        bool isProtected;
+        ProtectionStrategy strategy;
     }
 
-    struct Stake {
-        uint256 reportId;
-        uint256 timestamp;
+    struct Protections {
+        mapping(address => Protection) protections;
     }
 
-    mapping(uint256 => address) public reporter;
-    mapping(address => TokenReports) tokenReports;
-    mapping(uint256 => uint256) public reportTimestamps;
-    mapping(uint256 => address) public reportTokens;
-    mapping(uint256 => bool) public anotherReports;
-
-    mapping(address => Stake[]) public stakes;
-    mapping(uint256 => address[]) public stakers;
+    // --- EVENTS ---
 
     event AdminChanged(address indexed previousAdmin, address indexed newAdmin);
     event RecoveryAdminChanged(address indexed previousAdmin, address indexed newAdmin);
     event PauseAdminChanged(address indexed previousAdmin, address indexed newAdmin);
 
-    event ReportSubmitted(address indexed token, address indexed account, uint256 reportId);
-    event AnotherReportSubmitted(address indexed token, address indexed account, uint256 reportId);
-    event Staked(address indexed token, address indexed account, uint256 reportId);
+
+    // --- V2 EVENTS ---
+
+    event GuardianSet(address indexed oldGuardian, address indexed newGuardian);
+    event ProtectedAddressSet(address indexed token, address indexed protectedAddress, address indexed strategy);
+    event RemovedProtectedAddress(address indexed token, address indexed protectedAddress);
+
     // --- MODIFIERS ---
 
     modifier onlyLosslessRecoveryAdmin() {
-        require(_msgSender() == recoveryAdmin, "LOSSLESS: must be recoveryAdmin");
+        require(msg.sender == recoveryAdmin, "LOSSLESS: must be recoveryAdmin");
         _;
     }
 
     modifier onlyLosslessAdmin() {
-        require(admin == _msgSender(), "LOSSLESS: must be admin");
+        require(admin == msg.sender, "LOSSLESS: must be admin");
         _;
     }
 
-    // --- ADMIN STUFF ---
+    modifier onlyPauseAdmin() {
+        require(msg.sender == pauseAdmin, "LOSSLESS: sender is not guardian");
+        _;
+    }
 
-    function pause() public {
-        require(_msgSender() == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
+    // --- V2 MODIFIERS ---
+
+    modifier onlyGuardian() {
+        require(msg.sender == guardian, "LOSSLESS: sender is not guardian");
+        _;
+    }
+
+    // --- VIEWS ---
+
+    function getVersion() public pure returns (uint256) {
+        return 2;
+    }
+
+    // --- V2 VIEWS ---
+
+    function isAddressProtected(address token, address protectedAddress) public view returns (bool) {
+        return tokenProtections[token].protections[protectedAddress].isProtected;
+    }
+
+    function getProtectedAddressStrategy(address token, address protectedAddress) public view returns (address) {
+        return address(tokenProtections[token].protections[protectedAddress].strategy);
+    }
+
+    // --- ADMINISTRATION ---
+
+    function pause() public onlyPauseAdmin  {
         _pause();
     }    
     
-    function unpause() public {
-        require(_msgSender() == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
+    function unpause() public onlyPauseAdmin {
         _unpause();
     }
 
@@ -95,106 +107,49 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
         pauseAdmin = newPauseAdmin;
     }
 
-    function setReportLifetime(uint256 _reportLifetime) public onlyLosslessAdmin {
-        reportLifetime = _reportLifetime;
+    // --- GUARD ---
+
+    // @notice Set a guardian contract.
+    // @dev Guardian contract must be trusted as it has some access rights and can modify controller's state.
+    function setGuardian(address newGuardian) public onlyLosslessAdmin whenNotPaused {
+        emit GuardianSet(guardian, newGuardian);
+        guardian = newGuardian;
     }
 
-    function setLosslessToken(address _losslessToken) public onlyLosslessAdmin {
-        losslessToken = LERC20(_losslessToken);
+    // @notice Sets protection for an address with the choosen strategy.
+    // @dev Strategies are verified in the guardian contract.
+    // @dev This call is initiated from a strategy, but guardian proxies it.
+    function setProtectedAddress(address token, address protectedAddresss, ProtectionStrategy strategy) external onlyGuardian whenNotPaused {
+        Protection storage protection = tokenProtections[token].protections[protectedAddresss];
+        protection.isProtected = true;
+        protection.strategy = strategy;
+        emit ProtectedAddressSet(token, protectedAddresss, address(strategy));
     }
 
-    function setStakeAmount(uint256 _stakeAmount) public onlyLosslessAdmin {
-        stakeAmount = _stakeAmount;
+    // @notice Remove the protection from the address.
+    // @dev Strategies are verified in the guardian contract.
+    // @dev This call is initiated from a strategy, but guardian proxies it.
+    function removeProtectedAddress(address token, address protectedAddresss) external onlyGuardian whenNotPaused {
+        delete tokenProtections[token].protections[protectedAddresss];
+        emit RemovedProtectedAddress(token, protectedAddresss);
     }
-
-    // --- GETTERS ---
-
-    function getVersion() public pure returns (uint256) {
-        return 2;
-    }
-
-    // GET STAKE INFO
-
-    function getAccountStakes(address account) public view returns(Stake[] memory) {
-        return stakes[account];
-    }
-
-    function getReportStakes(uint256 reportId) public view returns(address[] memory) {
-        return stakers[reportId];
-    }
-
-    function getIsAccountStaked(uint256 reportId, address account) public view returns(bool) {
-        for(uint256 i = 0; i < stakes[account].length; i++) {
-            if (stakes[account][i].reportId == reportId) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    // --- REPORTS ---
-
-    function report(address token, address account) public {
-        uint256 reportId = tokenReports[token].reports[account];
-        uint256 reportTimestamp = reportTimestamps[reportId];
-        require(reportId == 0 || reportTimestamp + reportLifetime < block.timestamp, "LOSSLESS: report already exists");
-
-        reportCount = reportCount + 1;
-        reportId = reportCount;
-        reporter[reportId] = _msgSender();
-        // Bellow does not allow freezing more than one wallet. Do we want that?
-        tokenReports[token].reports[account] = reportId;
-        reportTimestamps[reportId] = block.timestamp;
-        reportTokens[reportId] = token;
-
-        losslessToken.transferFrom(_msgSender(), address(this), stakeAmount);
-
-        emit ReportSubmitted(token, account, reportId);
-    }
-
-    function reportAnother(uint256 reportId, address token, address account) public {
-        uint256 reportTimestamp = reportTimestamps[reportId];
-        require(reportId > 0 && reportTimestamp + reportLifetime > block.timestamp, "LOSSLESS: report does not exists");
-        require(anotherReports[reportId] == false, "LOSSLESS: another report already submitted");
-        require(_msgSender() == reporter[reportId], "LOSSLESS: invalid reporter");
-
-        anotherReports[reportId] = true;
-        tokenReports[token].reports[account] = reportId;
-
-        emit AnotherReportSubmitted(token, account, reportId);
-    }
-
-    function stake(uint256 reportId) public {        
-        require(!getIsAccountStaked(reportId, _msgSender()), "LOSSLESS: already staked");
-        require(reporter[reportId] != _msgSender(), "LOSSLESS: reporter can not stake");
-        uint256 reportTimestamp = reportTimestamps[reportId];
-        require(reportId > 0 && reportTimestamp + reportLifetime > block.timestamp, "LOSSLESS: report does not exists");
-
-        stakers[reportId].push(_msgSender());
-        stakes[_msgSender()].push(Stake(reportId, block.timestamp));
-        losslessToken.transferFrom(_msgSender(), address(this), stakeAmount);
-        
-        emit Staked(reportTokens[reportId], _msgSender(), reportId);
-    }
-
 
     // --- BEFORE HOOKS ---
 
+    // @notice If address is protected, transfer validation rules have to be run inside the strategy.
+    // @dev isTransferAllowed reverts in case transfer can not be done by the defined rules.
     function beforeTransfer(address sender, address recipient, uint256 amount) external {
-        uint256 reportId = tokenReports[_msgSender()].reports[sender];
-        uint256 reportTimestamp = reportTimestamps[reportId];
-        require(reportId == 0 || reportTimestamp + reportLifetime < block.timestamp, "LOSSLESS: address is temporarily flagged");
+        if (tokenProtections[msg.sender].protections[sender].isProtected) {
+            tokenProtections[msg.sender].protections[sender].strategy.isTransferAllowed(msg.sender, sender, recipient, amount);
+        }
     }
 
+    // @notice If address is protected, transfer validation rules have to be run inside the strategy.
+    // @dev isTransferAllowed reverts in case transfer can not be done by the defined rules.
     function beforeTransferFrom(address msgSender, address sender, address recipient, uint256 amount) external {
-        uint256 reportId = tokenReports[_msgSender()].reports[sender];
-        uint256 reportTimestamp = reportTimestamps[reportId];
-        require(reportId == 0 || reportTimestamp + reportLifetime < block.timestamp, "LOSSLESS: address is temporarily flagged");
-
-        uint256 msgSenderReportId = tokenReports[_msgSender()].reports[msgSender];
-        uint256 msgSenderReportTimestamp = reportTimestamps[msgSenderReportId];
-        require(msgSenderReportId == 0 || msgSenderReportTimestamp + reportLifetime < block.timestamp, "LOSSLESS: address is temporarily flagged");
+        if (tokenProtections[msg.sender].protections[sender].isProtected) {
+            tokenProtections[msg.sender].protections[sender].strategy.isTransferAllowed(msg.sender, sender, recipient, amount);
+        }
     }
 
     function beforeApprove(address sender, address spender, uint256 amount) external {}
@@ -204,6 +159,8 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     function beforeDecreaseAllowance(address msgSender, address spender, uint256 subtractedValue) external {}
 
     // --- AFTER HOOKS ---
+    // * After hooks are deprecated in LERC20 but we have to keep them
+    //   here in order to support legacy LERC20.
 
     function afterApprove(address sender, address spender, uint256 amount) external {}
 
