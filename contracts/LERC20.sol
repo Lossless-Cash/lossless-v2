@@ -40,16 +40,6 @@ interface ILosslessController {
     function beforeIncreaseAllowance(address msgSender, address spender, uint256 addedValue) external;
 
     function beforeDecreaseAllowance(address msgSender, address spender, uint256 subtractedValue) external;
-
-    function afterApprove(address sender, address spender, uint256 amount) external;
-
-    function afterTransfer(address sender, address recipient, uint256 amount) external;
-
-    function afterTransferFrom(address msgSender, address sender, address recipient, uint256 amount) external;
-
-    function afterIncreaseAllowance(address sender, address spender, uint256 addedValue) external;
-
-    function afterDecreaseAllowance(address sender, address spender, uint256 subtractedValue) external;
 }
 
 contract LERC20 is Context, IERC20 {
@@ -91,47 +81,36 @@ contract LERC20 is Context, IERC20 {
     modifier lssAprove(address spender, uint256 amount) {
         if (isLosslessOn) {
             lossless.beforeApprove(_msgSender(), spender, amount);
-            _;
-            lossless.afterApprove(_msgSender(), spender, amount);
-        } else {
-            _;
-        }
+        } 
+        _;
     }
 
     modifier lssTransfer(address recipient, uint256 amount) {
         if (isLosslessOn) {
             lossless.beforeTransfer(_msgSender(), recipient, amount);
-            _;
-        } else {
-            _;
-        }
+        } 
+        _;
     }
 
     modifier lssTransferFrom(address sender, address recipient, uint256 amount) {
         if (isLosslessOn) {
             lossless.beforeTransferFrom(_msgSender(),sender, recipient, amount);
-            _;
-        } else {
-            _;
         }
+        _;
     }
 
     modifier lssIncreaseAllowance(address spender, uint256 addedValue) {
         if (isLosslessOn) {
             lossless.beforeIncreaseAllowance(_msgSender(), spender, addedValue);
-            _;
-        } else {
-            _;
         }
+        _;
     }
 
     modifier lssDecreaseAllowance(address spender, uint256 subtractedValue) {
         if (isLosslessOn) {
             lossless.beforeDecreaseAllowance(_msgSender(), spender, subtractedValue);
-            _;
-        } else {
-            _;
         }
+        _;
     }
 
     modifier onlyRecoveryAdmin() {

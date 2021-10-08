@@ -6,7 +6,7 @@ import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "hardhat/console.sol";
 
-interface IProtectionStrategy {
+interface ProtectionStrategy {
     function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external;
 }
 
@@ -16,19 +16,27 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     address public recoveryAdmin;
 
     // --- V2 VARIABLES ---
+
+    address public guardian;
+    mapping(address => Protections) private tokenProtections;
+
     struct Protection {
         bool isProtected;
-        address strategy;
+        ProtectionStrategy strategy;
     }
+
     struct Protections {
         mapping(address => Protection) protections;
     }
-    address public guardian;
-    mapping(address => Protections) private tokenProtections;
+
+    // --- EVENTS ---
 
     event AdminChanged(address indexed previousAdmin, address indexed newAdmin);
     event RecoveryAdminChanged(address indexed previousAdmin, address indexed newAdmin);
     event PauseAdminChanged(address indexed previousAdmin, address indexed newAdmin);
+
+
+    // --- V2 EVENTS ---
 
     event GuardianSet(address indexed oldGuardian, address indexed newGuardian);
     event ProtectedAddressSet(address indexed token, address indexed protectedAddress, address indexed strategy);
@@ -46,8 +54,15 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
         _;
     }
 
+    modifier onlyPauseAdmin() {
+        require(msg.sender == pauseAdmin, "LOSSLESS: sender is not guardian");
+        _;
+    }
+
+    // --- V2 MODIFIERS ---
+
     modifier onlyGuardian() {
-        require(msg.sender == address(guardian), "LOSSLESS: sender is not guardian");
+        require(msg.sender == guardian, "LOSSLESS: sender is not guardian");
         _;
     }
 
@@ -57,23 +72,23 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
         return 2;
     }
 
+    // --- V2 VIEWS ---
+
     function isAddressProtected(address token, address protectedAddress) public view returns (bool) {
         return tokenProtections[token].protections[protectedAddress].isProtected;
     }
 
     function getProtectedAddressStrategy(address token, address protectedAddress) public view returns (address) {
-        return tokenProtections[token].protections[protectedAddress].strategy;
+        return address(tokenProtections[token].protections[protectedAddress].strategy);
     }
 
     // --- ADMINISTRATION ---
 
-    function pause() public {
-        require(msg.sender == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
+    function pause() public onlyPauseAdmin  {
         _pause();
     }    
     
-    function unpause() public {
-        require(msg.sender == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
+    function unpause() public onlyPauseAdmin {
         _unpause();
     }
 
@@ -95,7 +110,7 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     // --- GUARD ---
 
     // @notice Set a guardian contract.
-    // @dev guardian contract must be trusted as it has some access rights and can modify controller's state.
+    // @dev Guardian contract must be trusted as it has some access rights and can modify controller's state.
     function setGuardian(address newGuardian) public onlyLosslessAdmin whenNotPaused {
         emit GuardianSet(guardian, newGuardian);
         guardian = newGuardian;
@@ -104,14 +119,14 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     // @notice Sets protection for an address with the choosen strategy.
     // @dev Strategies are verified in the guardian contract.
     // @dev This call is initiated from a strategy, but guardian proxies it.
-    function setProtectedAddress(address token, address protectedAddresss, address strategy) external onlyGuardian whenNotPaused {
+    function setProtectedAddress(address token, address protectedAddresss, ProtectionStrategy strategy) external onlyGuardian whenNotPaused {
         Protection storage protection = tokenProtections[token].protections[protectedAddresss];
         protection.isProtected = true;
         protection.strategy = strategy;
-        emit ProtectedAddressSet(token, protectedAddresss, strategy);
+        emit ProtectedAddressSet(token, protectedAddresss, address(strategy));
     }
 
-    // @notice Remove the protectio from the address.
+    // @notice Remove the protection from the address.
     // @dev Strategies are verified in the guardian contract.
     // @dev This call is initiated from a strategy, but guardian proxies it.
     function removeProtectedAddress(address token, address protectedAddresss) external onlyGuardian whenNotPaused {
@@ -125,8 +140,7 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     // @dev isTransferAllowed reverts in case transfer can not be done by the defined rules.
     function beforeTransfer(address sender, address recipient, uint256 amount) external {
         if (tokenProtections[msg.sender].protections[sender].isProtected) {
-            IProtectionStrategy(tokenProtections[msg.sender].protections[sender].strategy)
-                .isTransferAllowed(msg.sender , sender, recipient, amount);
+            tokenProtections[msg.sender].protections[sender].strategy.isTransferAllowed(msg.sender, sender, recipient, amount);
         }
     }
 
@@ -134,8 +148,7 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     // @dev isTransferAllowed reverts in case transfer can not be done by the defined rules.
     function beforeTransferFrom(address msgSender, address sender, address recipient, uint256 amount) external {
         if (tokenProtections[msg.sender].protections[sender].isProtected) {
-            IProtectionStrategy(tokenProtections[msg.sender].protections[sender].strategy)
-                .isTransferAllowed(msg.sender, sender, recipient, amount);
+            tokenProtections[msg.sender].protections[sender].strategy.isTransferAllowed(msg.sender, sender, recipient, amount);
         }
     }
 
@@ -146,6 +159,8 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     function beforeDecreaseAllowance(address msgSender, address spender, uint256 subtractedValue) external {}
 
     // --- AFTER HOOKS ---
+    // * After hooks are deprecated in LERC20 but we have to keep them
+    //   here in order to support legacy LERC20.
 
     function afterApprove(address sender, address spender, uint256 amount) external {}
 

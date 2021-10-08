@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.9;
 
-import "hardhat/console.sol";
-
-interface ILosslessController {
+interface LosslessController {
     function admin() external returns(address);
 
     function isAddressProtected(address token, address protectedAddress) external view returns (bool);
 }
 
-interface IGuardian {
+interface Guardian {
     function protectionAdmin(address token) external returns (address);
 
     function setProtectedAddress(address token, address guardedAddress) external;
@@ -18,27 +16,33 @@ interface IGuardian {
 }
 
 abstract contract StrategyBase {
-    IGuardian public guardian;
-    ILosslessController public lossless;
+    Guardian public guardian;
+    LosslessController public controller;
+
+    // --- EVENTS ---
 
     event GuardianSet(address indexed newGuardian);
     event Paused(address indexed token, address indexed protectedAddress);
     event Unpaused(address indexed token, address indexed protectedAddress);
 
-    constructor(address _guardian, address _lossless) {
-        guardian = IGuardian(_guardian);
-        lossless = ILosslessController(_lossless);
+    constructor(Guardian _guardian, LosslessController _controller) {
+        guardian = _guardian;
+        controller = _controller;
     }
+
+    // --- MODIFIERS ---
 
     modifier onlyProtectionAdmin(address token) {
         require(msg.sender == guardian.protectionAdmin(token), "LOSSLESS: not protection admin");
         _;
     }
 
+    // --- METHODS ---
+
     // @dev In case guardian is changed, this allows not to redeploy strategy and just update it.
-    function setGuardian(address newGuardian) public {
-        require(msg.sender == lossless.admin(), "LOSSLESS: not lossless admin");
-        guardian = IGuardian(newGuardian);
-        emit GuardianSet(newGuardian);
+    function setGuardian(Guardian newGuardian) public {
+        require(msg.sender == controller.admin(), "LOSSLESS: not lossless admin");
+        guardian = newGuardian;
+        emit GuardianSet(address(newGuardian));
     }
 }
