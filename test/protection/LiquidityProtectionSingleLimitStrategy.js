@@ -5,6 +5,8 @@ const {
   mineBlocks,
 } = require('../utils');
 
+const { time } = require('@openzeppelin/test-helpers');
+
 let vars;
 let protection;
 
@@ -84,7 +86,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
 
     describe('when sender is not guard admin', () => {
       it('should revert', async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
+        const timeNumBefore = await ethers.provider.getBlock();
 
         await expect(
           protection.liquidityProtectionSingleLimitStrategy
@@ -92,9 +94,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
             .setLimitBatched(
               vars.erc20s[0].address,
               [vars.oneMoreAccount.address, vars.initialHolder.address],
-              100,
+              300,
               10,
-              blockNumBefore,
+              timeNumBefore.timestamp,
             ),
         ).to.be.revertedWith('LOSSLESS: not protection admin');
       });
@@ -102,7 +104,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
 
     describe('when sender is protection admin of another token', () => {
       it('should revert', async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
+        const timeNumBefore = await ethers.provider.getBlock();
 
         await expect(
           protection.liquidityProtectionSingleLimitStrategy
@@ -110,9 +112,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
             .setLimitBatched(
               vars.erc20s[0].address,
               [vars.oneMoreAccount.address, vars.initialHolder.address],
-              100,
+              300,
               10,
-              blockNumBefore,
+              timeNumBefore.timestamp,
             ),
         ).to.be.revertedWith('LOSSLESS: not protection admin');
       });
@@ -120,7 +122,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
 
     describe('when sender is guard admin', () => {
       beforeEach(async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
+        const timeNumBefore = await ethers.provider.getBlock();
 
         await protection.guardian
           .connect(vars.lssAdmin)
@@ -141,9 +143,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           .setLimitBatched(
             vars.erc20s[0].address,
             [vars.oneMoreAccount.address, vars.initialHolder.address],
-            100,
+            300,
             10,
-            blockNumBefore,
+            timeNumBefore.timestamp,
           );
       });
 
@@ -163,16 +165,16 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
       });
 
       it('should emit ProtectedAddressSet events', async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
+        const timeNumBefore = await ethers.provider.getBlock();
         await expect(
           protection.liquidityProtectionSingleLimitStrategy
             .connect(vars.guardianAdmin)
             .setLimitBatched(
               vars.erc20s[0].address,
               [vars.oneMoreAccount.address, vars.initialHolder.address],
-              100,
+              300,
               10,
-              blockNumBefore,
+              timeNumBefore.timestamp,
             ),
         )
           .to.emit(vars.losslessController, 'ProtectedAddressSet')
@@ -188,9 +190,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
             .setLimitBatched(
               vars.erc20s[0].address,
               [vars.oneMoreAccount.address, vars.initialHolder.address],
-              100,
+              300,
               10,
-              blockNumBefore,
+              timeNumBefore.timestamp,
             ),
         )
           .to.emit(vars.losslessController, 'ProtectedAddressSet')
@@ -263,7 +265,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
 
     describe('when sender is not guard admin', () => {
       it('should revert', async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
+        const timeNumBefore = await ethers.provider.getBlock();
 
         await expect(
           protection.liquidityProtectionSingleLimitStrategy
@@ -271,9 +273,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
             .setLimit(
               vars.erc20s[0].address,
               vars.oneMoreAccount.address,
-              100,
+              300,
               10,
-              blockNumBefore,
+              timeNumBefore.timestamp,
             ),
         ).to.be.revertedWith('LOSSLESS: not protection admin');
       });
@@ -281,7 +283,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
 
     describe('when sender is protection admin of another token', () => {
       it('should revert', async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
+        const timeNumBefore = await ethers.provider.getBlock();
 
         await expect(
           protection.liquidityProtectionSingleLimitStrategy
@@ -289,9 +291,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
             .setLimit(
               vars.erc20s[0].address,
               vars.oneMoreAccount.address,
-              100,
+              300,
               10,
-              blockNumBefore,
+              timeNumBefore.timestamp,
             ),
         ).to.be.revertedWith('LOSSLESS: not protection admin');
       });
@@ -299,7 +301,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
 
     describe('when sender is guard admin', () => {
       beforeEach(async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
+        const timeNumBefore = await ethers.provider.getBlock();
 
         await protection.guardian
           .connect(vars.lssAdmin)
@@ -320,9 +322,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           .setLimit(
             vars.erc20s[0].address,
             vars.oneMoreAccount.address,
-            100,
+            300,
             10,
-            blockNumBefore,
+            timeNumBefore.timestamp,
           );
       });
 
@@ -336,16 +338,16 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
       });
 
       it('should emit ProtectedAddressSet events', async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
+        const timeNumBefore = await ethers.provider.getBlock();
         await expect(
           protection.liquidityProtectionSingleLimitStrategy
             .connect(vars.guardianAdmin)
             .setLimit(
               vars.erc20s[0].address,
               vars.oneMoreAccount.address,
-              100,
+              300,
               10,
-              blockNumBefore,
+              timeNumBefore.timestamp,
             ),
         )
           .to.emit(vars.losslessController, 'ProtectedAddressSet')
@@ -420,7 +422,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           true,
         );
 
-      const blockNumBefore = await ethers.provider.getBlockNumber();
+      const timeNumBefore = await ethers.provider.getBlock();
       await protection.guardian
         .connect(vars.lssAdmin)
         .verifyAddress(
@@ -440,9 +442,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
         .setLimitBatched(
           vars.erc20s[0].address,
           [vars.oneMoreAccount.address, vars.initialHolder.address],
-          5,
+          300,
           10,
-          blockNumBefore,
+          timeNumBefore.timestamp,
         );
 
       await protection.guardian
@@ -464,9 +466,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
         .setLimitBatched(
           vars.erc20s[1].address,
           [vars.oneMoreAccount.address, vars.initialHolder.address],
-          5,
+          300,
           10,
-          blockNumBefore,
+          timeNumBefore.timestamp,
         );
 
       await protection.guardian
@@ -488,9 +490,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
         .setLimitBatched(
           vars.erc20s[2].address,
           [vars.oneMoreAccount.address, vars.initialHolder.address],
-          5,
+          300,
           10,
-          blockNumBefore,
+          timeNumBefore.timestamp,
         );
     });
 
@@ -662,7 +664,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
 
       describe('when address is protected', () => {
         beforeEach(async () => {
-          const blockNumBefore = await ethers.provider.getBlockNumber();
+          const timeNumBefore = await ethers.provider.getBlock();
           await protection.guardian
             .connect(vars.lssAdmin)
             .verifyAddress(
@@ -682,9 +684,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
             .setLimitBatched(
               vars.erc20s[0].address,
               [vars.oneMoreAccount.address, vars.initialHolder.address],
-              5,
+              300,
               10,
-              blockNumBefore,
+              timeNumBefore.timestamp,
             );
 
           await protection.guardian
@@ -706,9 +708,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
             .setLimitBatched(
               vars.erc20s[1].address,
               [vars.oneMoreAccount.address, vars.initialHolder.address],
-              5,
+              300,
               10,
-              blockNumBefore,
+              timeNumBefore.timestamp,
             );
         });
 
@@ -749,14 +751,13 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
       await protection.guardian
         .connect(vars.lssAdmin)
         .verifyToken(vars.erc20s[0].address, true);
+
       await protection.guardian
         .connect(vars.admin)
         .setProtectionAdmin(vars.erc20s[0].address, vars.guardianAdmin.address);
-
       await vars.losslessController
         .connect(vars.lssAdmin)
         .setGuardian(protection.guardian.address);
-
       await protection.guardian
         .connect(vars.lssAdmin)
         .verifyStrategies(
@@ -764,7 +765,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           true,
         );
 
-      const blockNumBefore = await ethers.provider.getBlockNumber();
+      const timeNumBefore = await ethers.provider.getBlock();
       await protection.guardian
         .connect(vars.lssAdmin)
         .verifyAddress(
@@ -784,9 +785,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
         .setLimitBatched(
           vars.erc20s[0].address,
           [vars.oneMoreAccount.address, vars.initialHolder.address],
-          5,
+          300,
           10,
-          blockNumBefore + 2,
+          timeNumBefore.timestamp + 2,
         );
     });
 
@@ -845,13 +846,18 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
         await vars.erc20s[0]
           .connect(vars.initialHolder)
           .transfer(vars.recipient.address, 9);
-        await mineBlocks(11);
+      
+        await ethers.provider.send('evm_increaseTime', [
+          Number(time.duration.seconds(305)),
+        ]);
+
         await vars.erc20s[0]
           .connect(vars.initialHolder)
           .transfer(vars.recipient.address, 9);
         await vars.erc20s[0]
           .connect(vars.recipient)
           .transfer(vars.anotherAccount.address, 1);
+
         expect(
           await vars.erc20s[0].balanceOf(vars.anotherAccount.address),
         ).to.be.equal(1);
@@ -863,7 +869,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
         await vars.erc20s[0]
           .connect(vars.initialHolder)
           .transfer(vars.recipient.address, 9);
-        await mineBlocks(10);
+          await ethers.provider.send('evm_increaseTime', [
+    Number(time.duration.seconds(300)),
+  ]);
         await vars.erc20s[0]
           .connect(vars.initialHolder)
           .transfer(vars.recipient.address, 9);
@@ -880,11 +888,15 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
         await vars.erc20s[0]
           .connect(vars.initialHolder)
           .transfer(vars.recipient.address, 9);
-        await mineBlocks(11);
+          await ethers.provider.send('evm_increaseTime', [
+    Number(time.duration.seconds(301)),
+  ]);
         await vars.erc20s[0]
           .connect(vars.initialHolder)
           .transfer(vars.recipient.address, 9);
-        await mineBlocks(11);
+          await ethers.provider.send('evm_increaseTime', [
+    Number(time.duration.seconds(301)),
+  ]);
         await vars.erc20s[0]
           .connect(vars.initialHolder)
           .transfer(vars.recipient.address, 2);
@@ -899,26 +911,30 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
 
     describe('when limit is reset two times and reached then', async () => {
       it('should revert', async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
+        const timeNumBefore = await ethers.provider.getBlock();
         await protection.liquidityProtectionSingleLimitStrategy
           .connect(vars.guardianAdmin)
           .setLimitBatched(
             vars.erc20s[0].address,
             [vars.oneMoreAccount.address, vars.initialHolder.address],
-            5,
+            300,
             10,
-            blockNumBefore + 2,
+            timeNumBefore.timestamp + 2,
           );
 
         await vars.erc20s[0]
           .connect(vars.initialHolder)
           .transfer(vars.recipient.address, 1);
-        await mineBlocks(5);
+          await ethers.provider.send('evm_increaseTime', [
+    Number(time.duration.seconds(300)),
+  ]);
 
         await vars.erc20s[0]
           .connect(vars.initialHolder)
           .transfer(vars.recipient.address, 2);
-        await mineBlocks(5);
+          await ethers.provider.send('evm_increaseTime', [
+    Number(time.duration.seconds(300)),
+  ]);
 
         await vars.erc20s[0]
           .connect(vars.initialHolder)
@@ -933,15 +949,15 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
 
     describe('when limit is reached', async () => {
       it('should be reset after some time', async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
+        const timeNumBefore = await ethers.provider.getBlock();
         await protection.liquidityProtectionSingleLimitStrategy
           .connect(vars.guardianAdmin)
           .setLimitBatched(
             vars.erc20s[0].address,
             [vars.oneMoreAccount.address, vars.initialHolder.address],
-            5,
+            300,
             10,
-            blockNumBefore + 2,
+            timeNumBefore.timestamp + 2,
           );
 
         await vars.erc20s[0]
@@ -952,7 +968,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
             .connect(vars.initialHolder)
             .transfer(vars.anotherAccount.address, 2),
         ).to.be.revertedWith('LOSSLESS: limit reached');
-        await mineBlocks(100);
+          await ethers.provider.send('evm_increaseTime', [
+    Number(time.duration.seconds(301)),
+  ]);
 
         await vars.erc20s[0]
           .connect(vars.initialHolder)
@@ -984,7 +1002,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           true,
         );
 
-      const blockNumBefore = await ethers.provider.getBlockNumber();
+      const timeNumBefore = await ethers.provider.getBlock();
       await protection.guardian
         .connect(vars.lssAdmin)
         .verifyAddress(
@@ -1004,9 +1022,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
         .setLimitBatched(
           vars.erc20s[0].address,
           [vars.oneMoreAccount.address, vars.initialHolder.address],
-          5,
+          300,
           10,
-          blockNumBefore + 2,
+          timeNumBefore.timestamp + 2,
         );
       await vars.erc20s[0]
         .connect(vars.initialHolder)
@@ -1082,7 +1100,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
         await vars.erc20s[0]
           .connect(vars.oneMoreAccount)
           .transferFrom(vars.initialHolder.address, vars.recipient.address, 9);
-        await mineBlocks(11);
+          await ethers.provider.send('evm_increaseTime', [
+    Number(time.duration.seconds(301)),
+  ]);
         await vars.erc20s[0]
           .connect(vars.oneMoreAccount)
           .transferFrom(vars.initialHolder.address, vars.recipient.address, 9);
@@ -1103,7 +1123,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
         await vars.erc20s[0]
           .connect(vars.oneMoreAccount)
           .transferFrom(vars.initialHolder.address, vars.recipient.address, 9);
-        await mineBlocks(10);
+          await ethers.provider.send('evm_increaseTime', [
+    Number(time.duration.seconds(300)),
+  ]);
         await vars.erc20s[0]
           .connect(vars.oneMoreAccount)
           .transferFrom(vars.initialHolder.address, vars.recipient.address, 9);
@@ -1124,11 +1146,15 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
         await vars.erc20s[0]
           .connect(vars.oneMoreAccount)
           .transferFrom(vars.initialHolder.address, vars.recipient.address, 9);
-        await mineBlocks(11);
+          await ethers.provider.send('evm_increaseTime', [
+    Number(time.duration.seconds(301)),
+  ]);
         await vars.erc20s[0]
           .connect(vars.oneMoreAccount)
           .transferFrom(vars.initialHolder.address, vars.recipient.address, 9);
-        await mineBlocks(11);
+          await ethers.provider.send('evm_increaseTime', [
+    Number(time.duration.seconds(301)),
+  ]);
         await vars.erc20s[0]
           .connect(vars.oneMoreAccount)
           .transferFrom(vars.initialHolder.address, vars.recipient.address, 2);
@@ -1143,26 +1169,30 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
 
     describe('when limit is reset two times and reached then', async () => {
       it('should revert', async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
+        const timeNumBefore = await ethers.provider.getBlock();
         await protection.liquidityProtectionSingleLimitStrategy
           .connect(vars.guardianAdmin)
           .setLimitBatched(
             vars.erc20s[0].address,
             [vars.oneMoreAccount.address, vars.initialHolder.address],
-            5,
+            300,
             10,
-            blockNumBefore + 2,
+            timeNumBefore.timestamp + 2,
           );
 
         await vars.erc20s[0]
           .connect(vars.oneMoreAccount)
           .transferFrom(vars.initialHolder.address, vars.recipient.address, 1);
-        await mineBlocks(5);
+          await ethers.provider.send('evm_increaseTime', [
+    Number(time.duration.seconds(300)),
+  ]);
 
         await vars.erc20s[0]
           .connect(vars.oneMoreAccount)
           .transferFrom(vars.initialHolder.address, vars.recipient.address, 2);
-        await mineBlocks(5);
+          await ethers.provider.send('evm_increaseTime', [
+    Number(time.duration.seconds(300)),
+  ]);
 
         await vars.erc20s[0]
           .connect(vars.oneMoreAccount)
@@ -1181,15 +1211,15 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
 
     describe('when limit is reached', async () => {
       it('should be reset after some time', async () => {
-        const blockNumBefore = await ethers.provider.getBlockNumber();
+        const timeNumBefore = await ethers.provider.getBlock();
         await protection.liquidityProtectionSingleLimitStrategy
           .connect(vars.guardianAdmin)
           .setLimitBatched(
             vars.erc20s[0].address,
             [vars.oneMoreAccount.address, vars.initialHolder.address],
-            5,
+            300,
             10,
-            blockNumBefore + 2,
+            timeNumBefore.timestamp + 2,
           );
 
         await vars.erc20s[0]
@@ -1204,7 +1234,9 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               2,
             ),
         ).to.be.revertedWith('LOSSLESS: limit reached');
-        await mineBlocks(100);
+          await ethers.provider.send('evm_increaseTime', [
+    Number(time.duration.seconds(301)),
+  ]);
 
         await vars.erc20s[0]
           .connect(vars.oneMoreAccount)
@@ -1237,7 +1269,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           true,
         );
 
-      const blockNumBefore = await ethers.provider.getBlockNumber();
+      const timeNumBefore = await ethers.provider.getBlock();
 
       await protection.guardian
         .connect(vars.lssAdmin)
@@ -1260,7 +1292,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           [vars.oneMoreAccount.address, vars.initialHolder.address],
           100,
           10,
-          blockNumBefore,
+          timeNumBefore.timestamp,
         );
 
       await vars.erc20s[0]
@@ -1269,7 +1301,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
     });
 
     it('should return limit data', async () => {
-      const blockNumBefore = await ethers.provider.getBlockNumber();
+      const timeNumBefore = await ethers.provider.getBlock();
       const firstAddressLimit1 = await protection.liquidityProtectionSingleLimitStrategy.getLimit(
         vars.erc20s[0].address,
         vars.oneMoreAccount.address,
@@ -1277,7 +1309,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
 
       expect(firstAddressLimit1[0].toString()).to.be.equal('100');
       expect(firstAddressLimit1[1].toString()).to.be.equal(
-        (blockNumBefore - 4).toString(),
+        (timeNumBefore.timestamp - 4).toString(),
       );
       expect(firstAddressLimit1[2].toString()).to.be.equal('10');
       expect(firstAddressLimit1[3].toString()).to.be.equal('10');
@@ -1289,7 +1321,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
 
       expect(secondAddressLimit1[0].toString()).to.be.equal('100');
       expect(secondAddressLimit1[1].toString()).to.be.equal(
-        (blockNumBefore - 4).toString(),
+        (timeNumBefore.timestamp - 4).toString(),
       );
       expect(secondAddressLimit1[2].toString()).to.be.equal('10');
       expect(secondAddressLimit1[3].toString()).to.be.equal('8');

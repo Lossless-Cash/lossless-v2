@@ -7,8 +7,8 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
     mapping(address => Protection) private protection;
 
     struct Limit {
-        uint32 periodInBlocks;
-        uint32 lastCheckpointBlock;
+        uint256 periodInSeconds;
+        uint256 lastCheckpointTime;
         uint256 amountPerPeriod;
         uint256 amountLeftInCurrentPeriod;
     }
@@ -23,35 +23,35 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
 
     // @dev params mostly as in batched
     // @dev This method allows setting 0...N limit to 1 address.
-    // @dev Each item on the same index in periodsInBlocks, amountsPerPeriod, startBlocks represents a different variable of the same limit.
+    // @dev Each item on the same index in periodsInSeconds, amountsPerPeriod, startTimestamp represents a different variable of the same limit.
     function setLimits(
         address token,
         address protectedAddress,
-        uint32[] calldata periodsInBlocks,
+        uint256[] calldata periodsInSeconds,
         uint256[] calldata amountsPerPeriod,
-        uint32[] calldata startBlocks
+        uint256[] calldata startTimestamp
     ) public onlyProtectionAdmin(token) {
         guardian.setProtectedAddress(token, protectedAddress);
-        saveLimits(token, protectedAddress, periodsInBlocks, amountsPerPeriod, startBlocks);
+        saveLimits(token, protectedAddress, periodsInSeconds, amountsPerPeriod, startTimestamp);
     }
 
     // @param token Project token, the protection will be scoped inside of this token's transfers.
     // @param protectedAddress Address to apply the limits to.
-    // @param periodsInBlocks Limit period described in blocks. Each item in the list represents a different limit.
+    // @param periodsInSeconds Limit period described in seconds. Each item in the list represents a different limit.
     // @param amountsPerPeriod A list of max amounts that can be transfered in the coressponding period.
-    // @param startBlocks A list of item that shows when each of the limits should be activated. Desribed in block.
+    // @param startTimestamp A list of item that shows when each of the limits should be activated. Desribed in seconds.
     // @dev This method allows setting 0...N limits to 0...N addresses.
-    // @dev Each item on the same index in periodsInBlocks, amountsPerPeriod, startBlocks represents a different variable of the same limit.
+    // @dev Each item on the same index in periodsInSeconds, amountsPerPeriod, startTimestamp represents a different variable of the same limit.
     function setLimitsBatched(
         address token,
         address[] calldata protectedAddresses,
-        uint32[] calldata periodsInBlocks,
+        uint256[] calldata periodsInSeconds,
         uint256[] calldata amountsPerPeriod,
-        uint32[] calldata startBlocks
+        uint256[] calldata startTimestamp
     ) public onlyProtectionAdmin(token) {
         for(uint8 i = 0; i < protectedAddresses.length; i++) {
             guardian.setProtectedAddress(token, protectedAddresses[i]);
-            saveLimits(token, protectedAddresses[i], periodsInBlocks, amountsPerPeriod, startBlocks);
+            saveLimits(token, protectedAddresses[i], periodsInSeconds, amountsPerPeriod, startTimestamp);
         }
     }
 
@@ -68,14 +68,14 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
         require(controller.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
         Limit[] storage limits = protection[token].limits[protectedAddress];
         Limit storage firstLimit = limits[0];
-        uint32 maxPossibleCheckpointBlock = type(uint32).max - firstLimit.periodInBlocks;
-        require(firstLimit.lastCheckpointBlock != maxPossibleCheckpointBlock, "LOSSLESS: already paused");
+        uint256 maxPossibleCheckpointTime = type(uint256).max - firstLimit.periodInSeconds;
+        require(firstLimit.lastCheckpointTime != maxPossibleCheckpointTime, "LOSSLESS: already paused");
 
         limits.push(cloneLimit(0, limits));
 
         // Set first element to have zero amount left and make it so it never enters new period
         firstLimit.amountLeftInCurrentPeriod = 0;
-        firstLimit.lastCheckpointBlock = maxPossibleCheckpointBlock;
+        firstLimit.lastCheckpointTime = maxPossibleCheckpointTime;
 
         emit Paused(token, protectedAddress);
     }
@@ -85,8 +85,8 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
     function unpause(address token, address protectedAddress) public onlyProtectionAdmin(token) { 
         require(controller.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
         Limit[] storage limits = protection[token].limits[protectedAddress];
-        uint32 maxPossibleCheckpointBlock = type(uint32).max - limits[0].periodInBlocks;
-        require(limits[0].lastCheckpointBlock == maxPossibleCheckpointBlock, "LOSSLESS: not paused");
+        uint256 maxPossibleCheckpointTime = type(uint256).max - limits[0].periodInSeconds;
+        require(limits[0].lastCheckpointTime == maxPossibleCheckpointTime, "LOSSLESS: not paused");
         
         limits[0] = cloneLimit(limits.length - 1, limits);
         delete limits[limits.length - 1];
@@ -106,12 +106,12 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
             Limit storage limit = limits[i];
 
             // Is transfer is in the same period ?
-            if (limit.lastCheckpointBlock + limit.periodInBlocks > block.number) {
+            if (limit.lastCheckpointTime + limit.periodInSeconds > block.timestamp) {
                 limit.amountLeftInCurrentPeriod = calculateAmountLeft(amount, limit.amountLeftInCurrentPeriod);
             }
             // New period started, update checkpoint and reset amount
             else {
-                limit.lastCheckpointBlock = calculateUpdatedCheckpoint(limit.lastCheckpointBlock, limit.periodInBlocks);
+                limit.lastCheckpointTime = calculateUpdatedCheckpoint(limit.lastCheckpointTime, limit.periodInSeconds);
                 limit.amountLeftInCurrentPeriod = calculateAmountLeft(amount, limit.amountPerPeriod);
             }
             
@@ -124,16 +124,16 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
     function saveLimits(     
         address token,   
         address protectedAddress,
-        uint32[] calldata periodsInBlocks,
+        uint256[] calldata periodsInSeconds,
         uint256[] calldata amountsPerPeriod,
-        uint32[] calldata startBlocks
+        uint256[] calldata startTimestamp
     ) internal {
         Limit[] storage limits = protection[token].limits[protectedAddress];
-        for(uint8 i = 0; i < periodsInBlocks.length; i ++) {
+        for(uint8 i = 0; i < periodsInSeconds.length; i ++) {
             Limit memory limit;
-            limit.periodInBlocks = periodsInBlocks[i];
+            limit.periodInSeconds = periodsInSeconds[i];
             limit.amountPerPeriod = amountsPerPeriod[i];
-            limit.lastCheckpointBlock = startBlocks[i];
+            limit.lastCheckpointTime = startTimestamp[i];
             limit.amountLeftInCurrentPeriod = amountsPerPeriod[i];
             limits.push(limit);
         }
@@ -147,14 +147,14 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
         }
     }
 
-    function calculateUpdatedCheckpoint(uint32 lastCheckpointBlock, uint32 periodInBlocks) internal view returns(uint32) {
-        return lastCheckpointBlock + (periodInBlocks * ((uint32(block.number) - lastCheckpointBlock) / periodInBlocks));
+    function calculateUpdatedCheckpoint(uint256 lastCheckpointTime, uint256 periodInSeconds) internal pure returns(uint256) {
+        return lastCheckpointTime + periodInSeconds;
     }
 
     function cloneLimit(uint256 indexFrom, Limit[] memory limits) internal pure returns (Limit memory limitCopy)  {
-        limitCopy.periodInBlocks = limits[indexFrom].periodInBlocks;
+        limitCopy.periodInSeconds = limits[indexFrom].periodInSeconds;
         limitCopy.amountPerPeriod = limits[indexFrom].amountPerPeriod;
-        limitCopy.lastCheckpointBlock = limits[indexFrom].lastCheckpointBlock;
+        limitCopy.lastCheckpointTime = limits[indexFrom].lastCheckpointTime;
         limitCopy.amountLeftInCurrentPeriod = limits[indexFrom].amountLeftInCurrentPeriod;
     }
 
