@@ -23,7 +23,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           protection.liquidityProtectionSingleLimitStrategy
             .connect(vars.anotherAccount)
             .setGuardian(vars.anotherAccount.address),
-        ).to.be.revertedWith('LOSSLESS: not lossless admin');
+        ).to.be.revertedWith('LOSSLESS: Not lossless admin');
       });
     });
 
@@ -98,7 +98,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               10,
               timeNumBefore.timestamp,
             ),
-        ).to.be.revertedWith('LOSSLESS: not protection admin');
+        ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
 
@@ -116,7 +116,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               10,
               timeNumBefore.timestamp,
             ),
-        ).to.be.revertedWith('LOSSLESS: not protection admin');
+        ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
 
@@ -277,7 +277,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               10,
               timeNumBefore.timestamp,
             ),
-        ).to.be.revertedWith('LOSSLESS: not protection admin');
+        ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
 
@@ -295,7 +295,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               10,
               timeNumBefore.timestamp,
             ),
-        ).to.be.revertedWith('LOSSLESS: not protection admin');
+        ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
 
@@ -505,7 +505,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               vars.oneMoreAccount.address,
               vars.initialHolder.address,
             ]),
-        ).to.be.revertedWith('LOSSLESS: not protection admin');
+        ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
 
@@ -518,7 +518,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               vars.oneMoreAccount.address,
               vars.initialHolder.address,
             ]),
-        ).to.be.revertedWith('LOSSLESS: not protection admin');
+        ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
 
@@ -637,7 +637,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           protection.liquidityProtectionSingleLimitStrategy
             .connect(vars.anotherAccount)
             .pause(vars.erc20s[0].address, vars.initialHolder.address),
-        ).to.be.revertedWith('LOSSLESS: not protection admin');
+        ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
 
@@ -647,7 +647,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           protection.liquidityProtectionSingleLimitStrategy
             .connect(vars.oneMoreAccount)
             .pause(vars.erc20s[0].address, vars.initialHolder.address),
-        ).to.be.revertedWith('LOSSLESS: not protection admin');
+        ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
 
@@ -658,7 +658,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
             protection.liquidityProtectionSingleLimitStrategy
               .connect(vars.guardianAdmin)
               .pause(vars.erc20s[0].address, vars.initialHolder.address),
-          ).to.be.revertedWith('LOSSLESS: not protected');
+          ).to.be.revertedWith('LOSSLESS: Address not protected');
         });
       });
 
@@ -726,7 +726,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               vars.erc20s[0]
                 .connect(vars.initialHolder)
                 .transfer(vars.recipient.address, 1),
-            ).to.be.revertedWith('LOSSLESS: limit reached');
+            ).to.be.revertedWith('LOSSLESS: Strategy Limit reached');
           });
 
           it('should emit Paused event', async () => {
@@ -823,7 +823,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           vars.erc20s[0]
             .connect(vars.initialHolder)
             .transfer(vars.recipient.address, 4),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
+        ).to.be.revertedWith('LOSSLESS: Strategy Limit reached');
       });
     });
 
@@ -837,7 +837,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           vars.erc20s[0]
             .connect(vars.initialHolder)
             .transfer(vars.recipient.address, 400),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
+        ).to.be.revertedWith('LOSSLESS: Strategy Limit reached');
       });
     });
 
@@ -879,7 +879,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           vars.erc20s[0]
             .connect(vars.initialHolder)
             .transfer(vars.recipient.address, 9),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
+        ).to.be.revertedWith('LOSSLESS: Strategy Limit reached');
       });
     });
 
@@ -943,7 +943,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           vars.erc20s[0]
             .connect(vars.initialHolder)
             .transfer(vars.recipient.address, 11),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
+        ).to.be.revertedWith('LOSSLESS: Strategy Limit reached');
       });
     });
 
@@ -967,7 +967,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
           vars.erc20s[0]
             .connect(vars.initialHolder)
             .transfer(vars.anotherAccount.address, 2),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
+        ).to.be.revertedWith('LOSSLESS: Strategy Limit reached');
           await ethers.provider.send('evm_increaseTime', [
     Number(time.duration.seconds(301)),
   ]);
@@ -1073,7 +1073,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               vars.recipient.address,
               20,
             ),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
+        ).to.be.revertedWith('LOSSLESS: Strategy Limit reached');
       });
     });
 
@@ -1091,7 +1091,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               vars.recipient.address,
               400,
             ),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
+        ).to.be.revertedWith('LOSSLESS: Strategy Limit reached');
       });
     });
 
@@ -1137,7 +1137,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               vars.recipient.address,
               20,
             ),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
+        ).to.be.revertedWith('LOSSLESS: Strategy Limit reached');
       });
     });
 
@@ -1205,7 +1205,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               vars.recipient.address,
               11,
             ),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
+        ).to.be.revertedWith('LOSSLESS: Strategy Limit reached');
       });
     });
 
@@ -1233,7 +1233,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               vars.anotherAccount.address,
               2,
             ),
-        ).to.be.revertedWith('LOSSLESS: limit reached');
+        ).to.be.revertedWith('LOSSLESS: Strategy Limit reached');
           await ethers.provider.send('evm_increaseTime', [
     Number(time.duration.seconds(301)),
   ]);
@@ -1340,7 +1340,7 @@ describe('LiquidityProtectionSingleLimitStrategy', () => {
               vars.recipient.address,
               1,
             ),
-        ).to.be.revertedWith('LOSSLESS: not controller');
+        ).to.be.revertedWith('LOSSLESS: LSS Controller only');
       }),
     ]);
   });

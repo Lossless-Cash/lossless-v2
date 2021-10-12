@@ -4,7 +4,6 @@ pragma solidity 0.8.9;
 import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "hardhat/console.sol";
 
 interface ProtectionStrategy {
     function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external;
@@ -45,24 +44,24 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     // --- MODIFIERS ---
 
     modifier onlyLosslessRecoveryAdmin() {
-        require(msg.sender == recoveryAdmin, "LOSSLESS: must be recoveryAdmin");
+        require(msg.sender == recoveryAdmin, "LOSSLESS: Must be recoveryAdmin");
         _;
     }
 
     modifier onlyLosslessAdmin() {
-        require(admin == msg.sender, "LOSSLESS: must be admin");
+        require(admin == msg.sender, "LOSSLESS: Must be admin");
         _;
     }
 
     modifier onlyPauseAdmin() {
-        require(msg.sender == pauseAdmin, "LOSSLESS: sender is not guardian");
+        require(msg.sender == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
         _;
     }
 
     // --- V2 MODIFIERS ---
 
     modifier onlyGuardian() {
-        require(msg.sender == guardian, "LOSSLESS: sender is not guardian");
+        require(msg.sender == guardian, "LOSSLESS: Must be Guardian");
         _;
     }
 

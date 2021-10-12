@@ -17,7 +17,7 @@ describe('TreasuryProtectionStrategy', () => {
           protection.treasuryProtectionStrategy
             .connect(vars.anotherAccount)
             .setGuardian(vars.anotherAccount.address),
-        ).to.be.revertedWith('LOSSLESS: not lossless admin');
+        ).to.be.revertedWith('LOSSLESS: Not lossless admin');
       });
     });
 
@@ -76,7 +76,7 @@ describe('TreasuryProtectionStrategy', () => {
               vars.initialHolder.address,
               [vars.recipient.address],
             ),
-        ).to.be.revertedWith('LOSSLESS: not protection admin');
+        ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
 
@@ -90,7 +90,7 @@ describe('TreasuryProtectionStrategy', () => {
               vars.initialHolder.address,
               [vars.recipient.address],
             ),
-        ).to.be.revertedWith('LOSSLESS: not protection admin');
+        ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
 
@@ -303,7 +303,7 @@ describe('TreasuryProtectionStrategy', () => {
               vars.oneMoreAccount.address,
               vars.initialHolder.address,
             ]),
-        ).to.be.revertedWith('LOSSLESS: not protection admin');
+        ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
 
@@ -316,7 +316,7 @@ describe('TreasuryProtectionStrategy', () => {
               vars.oneMoreAccount.address,
               vars.initialHolder.address,
             ]),
-        ).to.be.revertedWith('LOSSLESS: not protection admin');
+        ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
 

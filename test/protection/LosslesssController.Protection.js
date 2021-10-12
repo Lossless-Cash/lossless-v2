@@ -20,7 +20,7 @@ describe('ControllerProtection', () => {
           vars.losslessController
             .connect(vars.anotherAccount)
             .setGuardian(protection.guardian.address),
-        ).to.be.revertedWith('LOSSLESS: must be admin');
+        ).to.be.revertedWith('LOSSLESS: Must be admin');
       });
     });
 
@@ -93,7 +93,7 @@ describe('ControllerProtection', () => {
               vars.anotherAccount.address,
               protection.treasuryProtectionStrategy.address,
             ),
-        ).to.be.revertedWith('LOSSLESS: sender is not guardian');
+        ).to.be.revertedWith('LOSSLESS: Must be Guardian');
       });
     });
 
@@ -221,7 +221,7 @@ describe('ControllerProtection', () => {
               vars.erc20s[0].address,
               vars.anotherAccount.address,
             ),
-        ).to.be.revertedWith('LOSSLESS: sender is not guardian');
+        ).to.be.revertedWith('LOSSLESS: Must be Guardian');
       });
 
       describe('when sender is guardian', async () => {

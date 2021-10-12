@@ -20,7 +20,7 @@ describe('LosslessGuardian', () => {
               vars.erc20s[0].address,
               vars.guardianAdmin.address,
             ),
-        ).to.be.revertedWith('LOSSLESS: token not verified');
+        ).to.be.revertedWith('LOSSLESS: Token not verified');
       });
     });
 
@@ -37,7 +37,7 @@ describe('LosslessGuardian', () => {
               vars.erc20s[0].address,
               vars.guardianAdmin.address,
             ),
-        ).to.be.revertedWith('LOSSLESS: not token admin');
+        ).to.be.revertedWith('LOSSLESS: Not token admin');
       });
     });
 
@@ -90,7 +90,7 @@ describe('LosslessGuardian', () => {
                 ],
                 true,
               ),
-          ).to.be.revertedWith('LOSSLESS: not lossless admin');
+          ).to.be.revertedWith('LOSSLESS: Not lossless admin');
         });
       });
 
@@ -198,7 +198,7 @@ describe('LosslessGuardian', () => {
                 ],
                 false,
               ),
-          ).to.be.revertedWith('LOSSLESS: not lossless admin');
+          ).to.be.revertedWith('LOSSLESS: Not lossless admin');
         });
       });
 
@@ -290,7 +290,7 @@ describe('LosslessGuardian', () => {
             protection.guardian
               .connect(vars.guardianAdmin)
               .verifyToken(vars.erc20s[0].address, true),
-          ).to.be.revertedWith('LOSSLESS: not lossless admin');
+          ).to.be.revertedWith('LOSSLESS: Not lossless admin');
         });
       });
 
@@ -327,7 +327,7 @@ describe('LosslessGuardian', () => {
             protection.guardian
               .connect(vars.guardianAdmin)
               .verifyToken(vars.erc20s[0].address, false),
-          ).to.be.revertedWith('LOSSLESS: not lossless admin');
+          ).to.be.revertedWith('LOSSLESS: Not lossless admin');
         });
       });
 
@@ -377,7 +377,7 @@ describe('LosslessGuardian', () => {
               vars.initialHolder.address,
               true,
             ),
-        ).to.be.revertedWith('LOSSLESS: not lossless admin');
+        ).to.be.revertedWith('LOSSLESS: Not lossless admin');
       });
     });
 
@@ -545,7 +545,7 @@ describe('LosslessGuardian', () => {
               vars.erc20s[0].address,
               vars.anotherAccount.address,
             ),
-        ).to.be.revertedWith('LOSSLESS: strategy not verified');
+        ).to.be.revertedWith('LOSSLESS: Strategy not verified');
       });
     });
 
@@ -579,7 +579,7 @@ describe('LosslessGuardian', () => {
                 vars.erc20s[0].address,
                 vars.oneMoreAccount.address,
               ),
-          ).to.be.revertedWith('LOSSLESS: address not verified');
+          ).to.be.revertedWith('LOSSLESS: Address not verified');
         });
       });
 
@@ -700,7 +700,7 @@ describe('LosslessGuardian', () => {
               vars.erc20s[0].address,
               vars.anotherAccount.address,
             ),
-        ).to.be.revertedWith('LOSSLESS: unauthorized');
+        ).to.be.revertedWith('LOSSLESS: Unauthorized access');
       });
     });
 

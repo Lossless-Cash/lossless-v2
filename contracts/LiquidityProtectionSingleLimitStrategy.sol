@@ -72,7 +72,7 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
     // @dev amountLeftInCurrentPeriod never resets because of the lastCheckpointTime
     // @dev This approach uses less gas than having a separate isPaused flag.
     function pause(address token, address protectedAddress) public onlyProtectionAdmin(token) {
-        require(controller.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
+        require(controller.isAddressProtected(token, protectedAddress), "LOSSLESS: Address not protected");
         Limit storage limit = protection[token].limits[protectedAddress];
         limit.amountLeftInCurrentPeriod = 0;
         limit.lastCheckpointTime = type(uint256).max - limit.periodInSeconds;
@@ -83,7 +83,7 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
     // @dev Every period has it's own amountLeft which gets decreased on every transfer.
     // @dev This method modifies state so should be callable only by the trusted address!
     function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external {
-        require(msg.sender == address(controller), "LOSSLESS: not controller");
+        require(msg.sender == address(controller), "LOSSLESS: LSS Controller only");
         Limit storage limit = protection[token].limits[sender];
 
         // Is transfer is in the same period ?
@@ -96,7 +96,7 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
             limit.amountLeftInCurrentPeriod = calculateAmountLeft(amount, limit.amountPerPeriod);
         }
         
-        require(limit.amountLeftInCurrentPeriod > 0, "LOSSLESS: limit reached");
+        require(limit.amountLeftInCurrentPeriod > 0, "LOSSLESS: Strategy Limit reached");
     }
 
     // --- INTERNAL METHODS ---

@@ -33,7 +33,7 @@ abstract contract StrategyBase {
     // --- MODIFIERS ---
 
     modifier onlyProtectionAdmin(address token) {
-        require(msg.sender == guardian.protectionAdmin(token), "LOSSLESS: not protection admin");
+        require(msg.sender == guardian.protectionAdmin(token), "LOSSLESS: Not protection admin");
         _;
     }
 
@@ -41,7 +41,7 @@ abstract contract StrategyBase {
 
     // @dev In case guardian is changed, this allows not to redeploy strategy and just update it.
     function setGuardian(Guardian newGuardian) public {
-        require(msg.sender == controller.admin(), "LOSSLESS: not lossless admin");
+        require(msg.sender == controller.admin(), "LOSSLESS: Not lossless admin");
         guardian = newGuardian;
         emit GuardianSet(address(newGuardian));
     }
