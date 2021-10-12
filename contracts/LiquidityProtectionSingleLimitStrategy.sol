@@ -8,8 +8,8 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
 
     // @dev using uint32 for gas savings
     struct Limit {
-        uint32 periodInBlocks;  
-        uint32 lastCheckpointBlock; 
+        uint256 periodInSeconds;  
+        uint256 lastCheckpointTime; 
         uint256 amountPerPeriod;
         uint256 amountLeftInCurrentPeriod;
     }
@@ -30,19 +30,19 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
 
     // @param token Project token, the protection will be scoped inside of this token's transfers.
     // @param protectedAddress Address to apply the limits to.
-    // @param periodInBlocks Limit period in blocks.
+    // @param periodInSeconds Limit period in seconds.
     // @param amountPerPeriod Max amount that can be transfered in period.
-    // @param startblock Shows when limit should be activated.
+    // @param startTimestamp Shows when limit should be activated.
     // @dev This method allows setting 1 limit to 0...N addresses.
     function setLimitBatched(
         address token,
         address[] calldata protectedAddresses,
-        uint32 periodInBlocks,
+        uint256 periodInSeconds,
         uint256 amountPerPeriod,
-        uint32 startBlock
+        uint256 startTimestamp
     ) public onlyProtectionAdmin(token) {
         for(uint8 i = 0; i < protectedAddresses.length; i++) {
-            saveLimit(token, protectedAddresses[i], periodInBlocks, amountPerPeriod, startBlock);
+            saveLimit(token, protectedAddresses[i], periodInSeconds, amountPerPeriod, startTimestamp);
             guardian.setProtectedAddress(token, protectedAddresses[i]);
         }
     }
@@ -52,11 +52,12 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
     function setLimit(
         address token,
         address protectedAddress,
-        uint32 periodInBlocks,
+        uint256 periodInSeconds,
         uint256 amountPerPeriod,
-        uint32 startBlock
+        uint256 startTimestamp
     ) public onlyProtectionAdmin(token) {
-        saveLimit(token, protectedAddress, periodInBlocks, amountPerPeriod, startBlock);
+        
+        saveLimit(token, protectedAddress, periodInSeconds, amountPerPeriod, startTimestamp);
         guardian.setProtectedAddress(token, protectedAddress);
     }
 
@@ -68,13 +69,13 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
     }
 
     // @dev Pausing is just adding a limit with amount 0.
-    // @dev amountLeftInCurrentPeriod never resets because of the lastCheckpointBlock
+    // @dev amountLeftInCurrentPeriod never resets because of the lastCheckpointTime
     // @dev This approach uses less gas than having a separate isPaused flag.
     function pause(address token, address protectedAddress) public onlyProtectionAdmin(token) {
         require(controller.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
         Limit storage limit = protection[token].limits[protectedAddress];
         limit.amountLeftInCurrentPeriod = 0;
-        limit.lastCheckpointBlock = type(uint32).max - limit.periodInBlocks;
+        limit.lastCheckpointTime = type(uint256).max - limit.periodInSeconds;
         emit Paused(token, protectedAddress);
     }
 
@@ -86,12 +87,12 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
         Limit storage limit = protection[token].limits[sender];
 
         // Is transfer is in the same period ?
-        if (limit.lastCheckpointBlock + limit.periodInBlocks > block.number) { 
+        if (limit.lastCheckpointTime + limit.periodInSeconds > block.timestamp) { 
             limit.amountLeftInCurrentPeriod = calculateAmountLeft(amount, limit.amountLeftInCurrentPeriod);
         }
         // New period started, update checkpoint and reset amount
         else {
-            limit.lastCheckpointBlock = calculateUpdatedCheckpoint(limit.lastCheckpointBlock, limit.periodInBlocks);
+            limit.lastCheckpointTime = calculateUpdatedCheckpoint(limit.lastCheckpointTime, limit.periodInSeconds);
             limit.amountLeftInCurrentPeriod = calculateAmountLeft(amount, limit.amountPerPeriod);
         }
         
@@ -103,14 +104,14 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
     function saveLimit(
         address token,
         address protectedAddress,
-        uint32 periodInBlocks,
+        uint256 periodInSeconds,
         uint256 amountPerPeriod,
-        uint32 startblock
+        uint256 startTimestamp
     ) internal {
         Limit storage limit = protection[token].limits[protectedAddress];
-        limit.periodInBlocks = periodInBlocks;
+        limit.periodInSeconds = periodInSeconds;
         limit.amountPerPeriod = amountPerPeriod;
-        limit.lastCheckpointBlock = startblock;
+        limit.lastCheckpointTime = startTimestamp;
         limit.amountLeftInCurrentPeriod = amountPerPeriod;
     }
 
@@ -122,7 +123,7 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
         }
     }
 
-    function calculateUpdatedCheckpoint(uint32 lastCheckpoint, uint32 periodInBlocks) internal view returns(uint32) {
-        return lastCheckpoint + (periodInBlocks * ((uint32(block.number) - lastCheckpoint) / periodInBlocks));
+    function calculateUpdatedCheckpoint(uint256 lastCheckpoint, uint256 periodInSeconds) internal pure returns(uint256) {
+        return lastCheckpoint + periodInSeconds;
     }
 }
