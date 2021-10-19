@@ -65,11 +65,11 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
     // @dev Pausing is just adding a limit with amount 0 in the front on the limits array.
     // @dev We need to keep it at the front to reduce the gas costs of iterating through the array.
     function pause(address token, address protectedAddress) public onlyProtectionAdmin(token) {
-        require(controller.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
+        require(controller.isAddressProtected(token, protectedAddress), "LOSSLESS: Address not protected");
         Limit[] storage limits = protection[token].limits[protectedAddress];
         Limit storage firstLimit = limits[0];
         uint256 maxPossibleCheckpointTime = type(uint256).max - firstLimit.periodInSeconds;
-        require(firstLimit.lastCheckpointTime != maxPossibleCheckpointTime, "LOSSLESS: already paused");
+        require(firstLimit.lastCheckpointTime != maxPossibleCheckpointTime, "LOSSLESS: Already paused");
 
         limits.push(cloneLimit(0, limits));
 
@@ -83,7 +83,7 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
     // @dev Removing the first limit in the array in case it is 0.
     // @dev In case project sets a 0 limit as the first limit's array element, this would allow removing it.
     function unpause(address token, address protectedAddress) public onlyProtectionAdmin(token) { 
-        require(controller.isAddressProtected(token, protectedAddress), "LOSSLESS: not protected");
+        require(controller.isAddressProtected(token, protectedAddress), "LOSSLESS: Address not protected");
         Limit[] storage limits = protection[token].limits[protectedAddress];
         uint256 maxPossibleCheckpointTime = type(uint256).max - limits[0].periodInSeconds;
         require(limits[0].lastCheckpointTime == maxPossibleCheckpointTime, "LOSSLESS: not paused");
@@ -99,7 +99,7 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
     // @dev Every period has it's own amountLeftInCurrentPeriod which gets decreased on every transfer.
     // @dev This method modifies state so should be callable only by the trusted address!
     function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external {
-        require(msg.sender == address(controller), "LOSSLESS: not controller");
+        require(msg.sender == address(controller), "LOSSLESS: LSS Controller only");
         Limit[] storage limits = protection[token].limits[sender];
         
         for(uint8 i = 0; i < limits.length; i++) {
@@ -115,7 +115,7 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
                 limit.amountLeftInCurrentPeriod = calculateAmountLeft(amount, limit.amountPerPeriod);
             }
             
-            require(limit.amountLeftInCurrentPeriod > 0, "LOSSLESS: limit reached");
+            require(limit.amountLeftInCurrentPeriod > 0, "LOSSLESS: Strategy limit reached");
         }
     }
 

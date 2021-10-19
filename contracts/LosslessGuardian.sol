@@ -38,17 +38,17 @@ contract LosslessGuardian {
     // --- MODIFIERS ---
 
     modifier onlyLosslessAdmin() {
-        require(msg.sender == lossless.admin(),"LOSSLESS: not lossless admin");
+        require(msg.sender == lossless.admin(),"LOSSLESS: Not lossless admin");
         _;
     }
 
     modifier onlyVerifiedStrategy() {
-        require(verifiedStrategies[msg.sender], "LOSSLESS: strategy not verified");
+        require(verifiedStrategies[msg.sender], "LOSSLESS: Strategy not verified");
         _;
     }
 
     modifier onlyVerifiedToken(address token) {
-        require(verifiedTokens[token], "LOSSLESS: token not verified");
+        require(verifiedTokens[token], "LOSSLESS: Token not verified");
         _;
     }
 
@@ -82,20 +82,20 @@ contract LosslessGuardian {
 
     // @notice Token admin sets up another admin that is responsible for managing protection.
     function setProtectionAdmin(address token, address admin) public onlyVerifiedToken(token) {
-        require(LERC20(token).getAdmin() == msg.sender, "LOSSLESS: not token admin");
+        require(LERC20(token).getAdmin() == msg.sender, "LOSSLESS: Not token admin");
         protectionAdmin[token] = admin;
         emit ProtectionAdminSet(token, admin);
     }
 
     // @dev This is called from strategy conctract and forwards that call to the controller.
     function setProtectedAddress(address token, address guardedAddress) external onlyVerifiedStrategy {
-        require(verifiedAddresses[token].verified[guardedAddress], "LOSSLESS: address not verified");
+        require(verifiedAddresses[token].verified[guardedAddress], "LOSSLESS: Address not verified");
         lossless.setProtectedAddress(token, guardedAddress, msg.sender);
     }
     
     // @dev This is called from strategy conctract or protection admin and forwards that call to the controller.
     function removeProtectedAddresses(address token, address protectedAddress) external {
-        require(verifiedStrategies[msg.sender] || (msg.sender == protectionAdmin[token] && msg.sender != address(0)), "LOSSLESS: unauthorized");
+        require(verifiedStrategies[msg.sender] || (msg.sender == protectionAdmin[token] && msg.sender != address(0)), "LOSSLESS: Unauthorized access");
         lossless.removeProtectedAddress(token, protectedAddress);
     }
 }
