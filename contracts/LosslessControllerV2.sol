@@ -92,16 +92,19 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     }
 
     function setAdmin(address newAdmin) public onlyLosslessRecoveryAdmin {
+        require(newAdmin != address(0), "LERC20: Cannot be zero address");
         emit AdminChanged(admin, newAdmin);
         admin = newAdmin;
     }
 
     function setRecoveryAdmin(address newRecoveryAdmin) public onlyLosslessRecoveryAdmin {
+        require(newRecoveryAdmin != address(0), "LERC20: Cannot be zero address");
         emit RecoveryAdminChanged(recoveryAdmin, newRecoveryAdmin);
         recoveryAdmin = newRecoveryAdmin;
     }
 
     function setPauseAdmin(address newPauseAdmin) public onlyLosslessRecoveryAdmin {
+        require(newPauseAdmin != address(0), "LERC20: Cannot be zero address");
         emit PauseAdminChanged(pauseAdmin, newPauseAdmin);
         pauseAdmin = newPauseAdmin;
     }

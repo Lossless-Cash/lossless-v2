@@ -132,11 +132,13 @@ contract LERC20 is Context, IERC20 {
     }
 
     function setLosslessAdmin(address newAdmin) public onlyRecoveryAdmin {
+        require(newAdmin != address(0), "LERC20: Cannot be zero address");
         emit AdminChanged(admin, newAdmin);
         admin = newAdmin;
     }
 
     function transferRecoveryAdminOwnership(address candidate, bytes32 keyHash) public onlyRecoveryAdmin {
+        require(candidate != address(0), "LERC20: Cannot be zero address");
         recoveryAdminCanditate = candidate;
         recoveryAdminKeyHash = keyHash;
         emit RecoveryAdminChangeProposed(candidate);
