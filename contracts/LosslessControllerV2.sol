@@ -9,14 +9,19 @@ interface ProtectionStrategy {
     function isTransferAllowed(address token, address sender, address recipient, uint256 amount) external;
 }
 
+interface ILssGuardian {
+    function getGuardian() external view returns(address);
+}
+
 contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgradeable {
     address public pauseAdmin;
     address public admin;
     address public recoveryAdmin;
 
+    ILssGuardian public losslessGuardian;
+
     // --- V2 VARIABLES ---
 
-    address public guardian;
     mapping(address => Protections) private tokenProtections;
 
     struct Protection {
@@ -37,7 +42,6 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
 
     // --- V2 EVENTS ---
 
-    event GuardianSet(address indexed oldGuardian, address indexed newGuardian);
     event ProtectedAddressSet(address indexed token, address indexed protectedAddress, address indexed strategy);
     event RemovedProtectedAddress(address indexed token, address indexed protectedAddress);
 
@@ -61,7 +65,7 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     // --- V2 MODIFIERS ---
 
     modifier onlyGuardian() {
-        require(msg.sender == guardian, "LOSSLESS: Must be Guardian");
+        require(msg.sender == losslessGuardian.getGuardian(), "LOSSLESS: Must be Guardian");
         _;
     }
 
@@ -111,11 +115,9 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
 
     // --- GUARD ---
 
-    // @notice Set a guardian contract.
-    // @dev Guardian contract must be trusted as it has some access rights and can modify controller's state.
-    function setGuardian(address newGuardian) external onlyLosslessAdmin whenNotPaused {
-        emit GuardianSet(guardian, newGuardian);
-        guardian = newGuardian;
+    function setLssGuardian(address guardianSC) public onlyLosslessAdmin {
+        require(guardianSC != address(0), "LSS: Cannot be zero address");
+        losslessGuardian = ILssGuardian(guardianSC);
     }
 
     // @notice Sets protection for an address with the choosen strategy.

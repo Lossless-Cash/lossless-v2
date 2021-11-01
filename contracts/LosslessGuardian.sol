@@ -14,6 +14,7 @@ interface LosslessController {
 }
 
 contract LosslessGuardian {
+    address public guardian;
     mapping(address => address) public protectionAdmin;
     mapping(address => bool) public verifiedStrategies;
     mapping(address => bool) public verifiedTokens;
@@ -30,6 +31,7 @@ contract LosslessGuardian {
     event AddressVerified(address indexed token, address indexed verifiedAddress, bool value);
     event ProtectionAdminSet(address indexed token, address indexed admin);
     event StrategyVerified(address indexed strategy, bool value);
+    event GuardianSet(address indexed oldGuardian, address indexed newGuardian);
 
     constructor(address _lossless) {
         lossless = LosslessController(_lossless);
@@ -56,6 +58,19 @@ contract LosslessGuardian {
 
     function isAddressVerified(address token, address addressToCheck) external view returns(bool) {
         return verifiedAddresses[token].verified[addressToCheck];
+    }
+
+    function getGuardian() external view returns(address){
+        return guardian;
+    }
+
+    // --- SETTERS
+
+    // @notice Set a guardian contract.
+    // @dev Guardian contract must be trusted as it has some access rights and can modify controller's state.
+    function setGuardian(address newGuardian) external onlyLosslessAdmin {
+        emit GuardianSet(guardian, newGuardian);
+        guardian = newGuardian;
     }
 
     // --- METHODS
