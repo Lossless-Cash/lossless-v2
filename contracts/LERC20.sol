@@ -57,7 +57,7 @@ contract LERC20 is Context, IERC20 {
     uint256 public losslessTurnOffTimestamp;
     bool public isLosslessTurnOffProposed;
     bool public isLosslessOn = true;
-    ILosslessController private lossless;
+    ILosslessController public lossless;
 
     event AdminChanged(address indexed previousAdmin, address indexed newAdmin);
     event RecoveryAdminChangeProposed(address indexed candidate);
