@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.0;
+pragma solidity 0.8.0;
 
 abstract contract Context {
     function _msgSender() internal view virtual returns (address) {
@@ -57,7 +57,7 @@ contract LERC20 is Context, IERC20 {
     uint256 public losslessTurnOffTimestamp;
     bool public isLosslessTurnOffProposed;
     bool public isLosslessOn = true;
-    ILosslessController private lossless;
+    ILosslessController public lossless;
 
     event AdminChanged(address indexed previousAdmin, address indexed newAdmin);
     event RecoveryAdminChangeProposed(address indexed candidate);
@@ -131,12 +131,14 @@ contract LERC20 is Context, IERC20 {
         }
     }
 
-    function setLosslessAdmin(address newAdmin) public onlyRecoveryAdmin {
+    function setLosslessAdmin(address newAdmin) external onlyRecoveryAdmin {
+        require(newAdmin != address(0), "LERC20: Cannot be zero address");
         emit AdminChanged(admin, newAdmin);
         admin = newAdmin;
     }
 
-    function transferRecoveryAdminOwnership(address candidate, bytes32 keyHash) public onlyRecoveryAdmin {
+    function transferRecoveryAdminOwnership(address candidate, bytes32 keyHash) external onlyRecoveryAdmin {
+        require(candidate != address(0), "LERC20: Cannot be zero address");
         recoveryAdminCanditate = candidate;
         recoveryAdminKeyHash = keyHash;
         emit RecoveryAdminChangeProposed(candidate);
@@ -149,13 +151,13 @@ contract LERC20 is Context, IERC20 {
         recoveryAdmin = recoveryAdminCanditate;
     }
 
-    function proposeLosslessTurnOff() public onlyRecoveryAdmin {
+    function proposeLosslessTurnOff() external onlyRecoveryAdmin {
         losslessTurnOffTimestamp = block.timestamp + timelockPeriod;
         isLosslessTurnOffProposed = true;
         emit LosslessTurnOffProposed(losslessTurnOffTimestamp);
     }
 
-    function executeLosslessTurnOff() public onlyRecoveryAdmin {
+    function executeLosslessTurnOff() external onlyRecoveryAdmin {
         require(isLosslessTurnOffProposed, "LERC20: TurnOff not proposed");
         require(losslessTurnOffTimestamp <= block.timestamp, "LERC20: Time lock in progress");
         isLosslessOn = false;
@@ -163,7 +165,7 @@ contract LERC20 is Context, IERC20 {
         emit LosslessTurnedOff();
     }
 
-    function executeLosslessTurnOn() public onlyRecoveryAdmin {
+    function executeLosslessTurnOn() external onlyRecoveryAdmin {
         isLosslessTurnOffProposed = false;
         isLosslessOn = true;
         emit LosslessTurnedOn();
