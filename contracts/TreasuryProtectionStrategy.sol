@@ -14,6 +14,8 @@ contract TreasuryProtectionStrategy is StrategyBase {
         mapping(address => Whitelist) protection; 
     }
 
+    event WhitelistAddresses(address[] indexed newGuardian);
+
     constructor(Guardian _guardian, LosslessController _controller) StrategyBase(_guardian, _controller) {}
 
     // --- VIEWS ---
@@ -34,8 +36,8 @@ contract TreasuryProtectionStrategy is StrategyBase {
         for(uint8 i = 0; i < whitelist.length; i++) {
             protectedAddresses[token].protection[protectedAddress].whitelist[whitelist[i]] = true;
         }
-
         guardian.setProtectedAddress(token, protectedAddress);
+        emit WhitelistAddresses(whitelist);
     }
 
     // @dev Remove whitelist for protected addresss.

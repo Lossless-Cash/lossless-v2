@@ -208,6 +208,16 @@ describe('TreasuryProtectionStrategy', () => {
           ),
         ).to.be.equal(false);
       });
+
+      it.only('should emit an event with a whitelist addresses array', async () => {
+        await expect(
+          protection.treasuryProtectionStrategy.connect(vars.guardianAdmin).setProtectedAddress(protection.guardian.address)
+        ).to.emit(
+          vars.losslessController,
+          'WhitelistAddresses'
+        ).withArgs(whitelist);
+      });
+
     });
   });
 
