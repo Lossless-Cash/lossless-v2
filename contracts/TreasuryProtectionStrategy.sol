@@ -14,7 +14,7 @@ contract TreasuryProtectionStrategy is StrategyBase {
         mapping(address => Whitelist) protection; 
     }
 
-    event WhitelistAddresses(address[] indexed newGuardian);
+    event WhitelistAddresses(address[] indexed newWhitelistAddresses);
 
     constructor(Guardian _guardian, LosslessController _controller) StrategyBase(_guardian, _controller) {}
 
