@@ -94,7 +94,7 @@ describe('TreasuryProtectionStrategy', () => {
       });
     });
 
-    describe('when sender is protection admin', () => {
+    describe.only('when sender is protection admin', () => {
       it('should succeed', async () => {
         expect(
           await vars.losslessController.isAddressProtected(
@@ -207,6 +207,52 @@ describe('TreasuryProtectionStrategy', () => {
             vars.initialHolder.address,
           ),
         ).to.be.equal(false);
+      });
+
+      it('should emit an event with a whitelist addresses array', async () => {
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyToken(vars.erc20s[1].address, true);
+
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyToken(vars.erc20s[2].address, true);
+
+        await protection.guardian
+          .connect(vars.admin)
+          .setProtectionAdmin(
+            vars.erc20s[1].address,
+            vars.guardianAdmin.address,
+          );
+
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[0].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(false);
+        expect(
+          await vars.losslessController.isAddressProtected(
+            vars.erc20s[2].address,
+            vars.initialHolder.address,
+          ),
+        ).to.be.equal(false);
+
+        await protection.guardian
+          .connect(vars.lssAdmin)
+          .verifyAddress(
+            vars.erc20s[1].address,
+            vars.initialHolder.address,
+            true,
+          );
+
+        await expect(
+          protection.treasuryProtectionStrategy.connect(vars.guardianAdmin).setProtectedAddress(
+            vars.erc20s[1].address,
+            vars.initialHolder.address,
+            [vars.recipient.address],
+          ),
+        ).to.emit(protection.treasuryProtectionStrategy, 'WhitelistAddresses').withArgs([vars.recipient.address]);
       });
     });
   });
