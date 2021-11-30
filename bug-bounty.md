@@ -2,7 +2,7 @@
 
 Lossless bug bounty program is focused around our smart contracts and finding ways to exploit them.
 
-{% embed url="https://immunefi.com/bounty/lossless/" caption="" %}
+<https://immunefi.com/bounty/lossless/>
 
 **Smart Contracts and Blockchain**\*
 
