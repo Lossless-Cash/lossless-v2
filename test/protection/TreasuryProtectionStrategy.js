@@ -1,10 +1,11 @@
+/* eslint-disable max-len */
 const { expect } = require('chai');
 const { setupControllerAndTokens, deployProtection } = require('../utils');
 
 let vars;
 let protection;
 
-describe('TreasuryProtectionStrategy', () => {
+describe.only('TreasuryProtectionStrategy', () => {
   beforeEach(async () => {
     vars = await setupControllerAndTokens();
     protection = await deployProtection(vars.losslessController);
@@ -252,12 +253,12 @@ describe('TreasuryProtectionStrategy', () => {
             vars.initialHolder.address,
             [vars.recipient.address],
           ),
-        ).to.emit(protection.treasuryProtectionStrategy, 'WhitelistAddresses').withArgs(vars.erc20s[1].address, vars.initialHolder.address, [vars.recipient.address]);
+        ).to.emit(protection.treasuryProtectionStrategy, 'WhitelistAddresses').withArgs(vars.erc20s[1].address, vars.initialHolder.address, [vars.recipient.address], true);
       });
     });
   });
 
-  describe('removeProtectedAddresses', () => {
+  describe('Removing from whitelist with setWhitelistState', () => {
     beforeEach(async () => {
       await protection.guardian
         .connect(vars.lssAdmin)
@@ -345,10 +346,10 @@ describe('TreasuryProtectionStrategy', () => {
         await expect(
           protection.treasuryProtectionStrategy
             .connect(vars.anotherAccount)
-            .removeProtectedAddresses(vars.erc20s[0].address, [
+            .setWhitelistState(vars.erc20s[0].address, vars.initialHolder.address, [
               vars.oneMoreAccount.address,
               vars.initialHolder.address,
-            ]),
+            ], false),
         ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
@@ -358,10 +359,10 @@ describe('TreasuryProtectionStrategy', () => {
         await expect(
           protection.treasuryProtectionStrategy
             .connect(vars.oneMoreAccount)
-            .removeProtectedAddresses(vars.erc20s[0].address, [
+            .setWhitelistState(vars.erc20s[0].address, vars.initialHolder.address, [
               vars.oneMoreAccount.address,
               vars.initialHolder.address,
-            ]),
+            ], false),
         ).to.be.revertedWith('LOSSLESS: Not protection admin');
       });
     });
@@ -377,28 +378,24 @@ describe('TreasuryProtectionStrategy', () => {
 
         await expect(protection.treasuryProtectionStrategy
           .connect(vars.guardianAdmin)
-          .removeProtectedAddresses(vars.erc20s[0].address, [
+          .setWhitelistState(vars.erc20s[0].address, vars.initialHolder.address, [
             vars.initialHolder.address,
-          ])).to.emit(protection.treasuryProtectionStrategy, 'RemovedWhitelistAddresses').withArgs(vars.erc20s[0].address, [vars.initialHolder.address]);
+          ], false)).to.emit(protection.treasuryProtectionStrategy, 'WhitelistAddresses').withArgs(vars.erc20s[0].address, vars.initialHolder.address, [vars.initialHolder.address], false);
 
         expect(
-          await vars.losslessController.isAddressProtected(
-            vars.erc20s[0].address,
-            vars.initialHolder.address,
-          ),
+          await protection.treasuryProtectionStrategy.isAddressWhitelisted(vars.erc20s[0].address, vars.initialHolder.address, vars.initialHolder.address),
         ).to.be.equal(false);
       });
 
-      it('should emit RemovedProtectedAddress event', async () => {
+      it('should emit WhitelistAddresses event', async () => {
         await expect(
           protection.treasuryProtectionStrategy
             .connect(vars.guardianAdmin)
-            .removeProtectedAddresses(vars.erc20s[0].address, [
+            .setWhitelistState(vars.erc20s[0].address, vars.initialHolder.address, [
               vars.initialHolder.address,
-            ]),
+            ], false),
         )
-          .to.emit(vars.losslessController, 'RemovedProtectedAddress')
-          .withArgs(vars.erc20s[0].address, vars.initialHolder.address);
+          .to.emit(protection.treasuryProtectionStrategy, 'WhitelistAddresses').withArgs(vars.erc20s[0].address, vars.initialHolder.address, [vars.initialHolder.address], false);
       });
 
       it('should succeed with a list of protected addresses', async () => {
@@ -426,22 +423,17 @@ describe('TreasuryProtectionStrategy', () => {
 
         await protection.treasuryProtectionStrategy
           .connect(vars.guardianAdmin)
-          .removeProtectedAddresses(vars.erc20s[0].address, [
+          .setWhitelistState(vars.erc20s[0].address, vars.initialHolder.address, [
             vars.initialHolder.address,
             vars.recipient.address,
-          ]);
+          ], false);
 
         expect(
-          await vars.losslessController.isAddressProtected(
-            vars.erc20s[0].address,
-            vars.initialHolder.address,
-          ),
+          await protection.treasuryProtectionStrategy.isAddressWhitelisted(vars.erc20s[0].address, vars.initialHolder.address, vars.initialHolder.address),
         ).to.be.equal(false);
+
         expect(
-          await vars.losslessController.isAddressProtected(
-            vars.erc20s[0].address,
-            vars.recipient.address,
-          ),
+          await protection.treasuryProtectionStrategy.isAddressWhitelisted(vars.erc20s[0].address, vars.initialHolder.address, vars.recipient.address),
         ).to.be.equal(false);
       });
 
@@ -461,9 +453,9 @@ describe('TreasuryProtectionStrategy', () => {
 
         await protection.treasuryProtectionStrategy
           .connect(vars.oneMoreAccount)
-          .removeProtectedAddresses(vars.erc20s[1].address, [
+          .setWhitelistState(vars.erc20s[1].address, vars.initialHolder.address, [
             vars.initialHolder.address,
-          ]);
+          ], false);
 
         expect(
           await vars.losslessController.isAddressProtected(
