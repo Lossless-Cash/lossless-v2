@@ -147,8 +147,8 @@ contract LiquidityProtectionMultipleLimitsStrategy is StrategyBase{
         }
     }
 
-    function calculateUpdatedCheckpoint(uint256 lastCheckpointTime, uint256 periodInSeconds) internal pure returns(uint256) {
-        return lastCheckpointTime + periodInSeconds;
+    function calculateUpdatedCheckpoint(uint256 lastCheckpointTime, uint256 periodInSeconds) internal view returns(uint256) {
+        return lastCheckpointTime + (periodInSeconds * ((block.timestamp - lastCheckpointTime) / periodInSeconds));
     }
 
     function cloneLimit(uint256 indexFrom, Limit[] memory limits) internal pure returns (Limit memory limitCopy)  {
