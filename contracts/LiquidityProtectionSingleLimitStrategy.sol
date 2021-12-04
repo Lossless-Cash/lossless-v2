@@ -6,7 +6,6 @@ import "./StrategyBase.sol";
 contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
     mapping(address => Protection) private protection;
 
-    // @dev using uint32 for gas savings
     struct Limit {
         uint256 periodInSeconds;  
         uint256 lastCheckpointTime; 
