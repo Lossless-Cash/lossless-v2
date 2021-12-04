@@ -123,7 +123,7 @@ contract LiquidityProtectionSingleLimitStrategy is StrategyBase {
         }
     }
 
-    function calculateUpdatedCheckpoint(uint256 lastCheckpoint, uint256 periodInSeconds) internal pure returns(uint256) {
-        return lastCheckpoint + periodInSeconds;
+    function calculateUpdatedCheckpoint(uint256 lastCheckpoint, uint256 periodInSeconds) internal view returns(uint256) {
+        return lastCheckpoint + (periodInSeconds * ((block.timestamp - lastCheckpoint) / periodInSeconds));
     }
 }

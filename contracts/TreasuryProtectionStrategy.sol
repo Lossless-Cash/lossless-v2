@@ -14,7 +14,7 @@ contract TreasuryProtectionStrategy is StrategyBase {
         mapping(address => Whitelist) protection; 
     }
 
-    event WhitelistAddresses(address token, address protectedAddress, address[] whitelist);
+    event WhitelistAddresses(address token, address protectedAddress, address[] whitelist, bool state);
     event RemovedWhitelistAddresses(address token, address[] addressesToRemove);
 
     constructor(Guardian _guardian, LosslessController _controller) StrategyBase(_guardian, _controller) {}
@@ -34,19 +34,15 @@ contract TreasuryProtectionStrategy is StrategyBase {
 
     // @dev Called by project owners. Sets a whitelist for protected address.
     function setProtectedAddress(address token, address protectedAddress, address[] calldata whitelist) public onlyProtectionAdmin(token) {
-        for(uint8 i = 0; i < whitelist.length; i++) {
-            protectedAddresses[token].protection[protectedAddress].whitelist[whitelist[i]] = true;
-        }
-        emit WhitelistAddresses(token, protectedAddress, whitelist);
+        setWhitelistState(token, protectedAddress, whitelist, true);
         guardian.setProtectedAddress(token, protectedAddress);
     }
 
-    // @dev Remove whitelist for protected addresss.
-    function removeProtectedAddresses(address token, address[] calldata addressesToRemove) public onlyProtectionAdmin(token) {
-        for(uint8 i = 0; i < addressesToRemove.length; i++) {
-            delete protectedAddresses[token].protection[addressesToRemove[i]];
-            guardian.removeProtectedAddresses(token, addressesToRemove[i]);
+    // @dev Called by project owners. Adds or removes addresses for the whitelist of the protected address.
+    function setWhitelistState(address token, address protectedAddress, address[] calldata addresses, bool state) public onlyProtectionAdmin(token) {
+        for(uint8 i = 0; i < addresses.length; i++) {
+            protectedAddresses[token].protection[protectedAddress].whitelist[addresses[i]] = state;
         }
-        emit RemovedWhitelistAddresses(token, addressesToRemove);
+        emit WhitelistAddresses(token, protectedAddress, addresses, state);
     }
 }
