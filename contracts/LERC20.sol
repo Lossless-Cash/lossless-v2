@@ -28,7 +28,7 @@ interface IERC20 {
 interface ILosslessController {
     function beforeTransfer(address sender, address recipient, uint256 amount) external;
 
-    function beforeTransferFrom(address msgSender, address sender, address recipient, uint256 amount) external;
+    function beforeTransferFrom(address sender, address recipient, uint256 amount) external;
 
     function beforeApprove(address sender, address spender, uint256 amount) external;
 
@@ -89,7 +89,7 @@ contract LERC20 is Context, IERC20 {
 
     modifier lssTransferFrom(address sender, address recipient, uint256 amount) {
         if (isLosslessOn) {
-            lossless.beforeTransferFrom(_msgSender(),sender, recipient, amount);
+            lossless.beforeTransferFrom(sender, recipient, amount);
         }
         _;
     }
