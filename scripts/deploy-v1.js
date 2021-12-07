@@ -9,9 +9,9 @@ async function main() {
   while (!instance) {
     try {
       instance = await upgrades.deployProxy(LosslessControllerV1, [
-        '0x0299a45a955d0A0C0E3E1c6056abfd7357801F10',
-        '0x0299a45a955d0A0C0E3E1c6056abfd7357801F10',
-        '0x0299a45a955d0A0C0E3E1c6056abfd7357801F10',
+        '0x06F2075587fa961E4Bf7e9c01c5c8EFf69C52837',
+        '0x06F2075587fa961E4Bf7e9c01c5c8EFf69C52837',
+        '0x06F2075587fa961E4Bf7e9c01c5c8EFf69C52837',
       ]);
     } catch (e) {
       console.log('Ignoring error', e);
@@ -23,12 +23,12 @@ async function main() {
   console.log('controller deployed, updating admin');
 
   await upgrades.admin.transferProxyAdminOwnership(
-    '0x0299a45a955d0A0C0E3E1c6056abfd7357801F10',
+    '0x06F2075587fa961E4Bf7e9c01c5c8EFf69C52837',
   );
 
   console.log(instance.address);
 
-  const LERC20 = await ethers.getContractFactory('LERC20');
+  // const LERC20 = await ethers.getContractFactory('LERC20');
 
   //   const erc20 = await LERC20.deploy(
   //     ethers.BigNumber.from(100).mul(ethers.BigNumber.from(10).pow(18)),

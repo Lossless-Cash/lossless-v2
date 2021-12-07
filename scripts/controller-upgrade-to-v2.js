@@ -3,7 +3,7 @@ async function main() {
     'LosslessControllerV2',
   );
   const upgraded = await upgrades.upgradeProxy(
-    '0x3E5f2374e10B134C8D035a5081da06E0Ea3EC210',
+    '0x128A877E54e1a2B23562E289029A0FfA77722f74',
     LosslessControllerV2,
   );
 

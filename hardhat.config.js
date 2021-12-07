@@ -3,7 +3,7 @@ require('@nomiclabs/hardhat-waffle');
 require('@openzeppelin/hardhat-upgrades');
 // require('solidity-coverage');
 require('hardhat-abi-exporter');
-// require('@nomiclabs/hardhat-etherscan');
+require('@nomiclabs/hardhat-etherscan');
 // require('@openzeppelin/hardhat-defender');
 require('hardhat-gas-reporter');
 
@@ -18,6 +18,15 @@ const {
 module.exports = {
   solidity: {
     compilers: [
+      {
+        version: '0.8.2',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 1000,
+          },
+        },
+      },
       {
         version: '0.8.0',
         settings: {
