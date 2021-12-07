@@ -26,7 +26,7 @@ contract LosslessControllerV1 is Initializable, ContextUpgradeable, PausableUpgr
         _;
     }
 
-    function initialize(address _admin, address _recoveryAdmin, address _pauseAdmin) public initializer {
+    function initialize(address _admin, address _recoveryAdmin, address _pauseAdmin) external initializer {
         admin = _admin;
         recoveryAdmin = _recoveryAdmin;
         pauseAdmin = _pauseAdmin;
@@ -34,34 +34,34 @@ contract LosslessControllerV1 is Initializable, ContextUpgradeable, PausableUpgr
 
     // --- SETTERS ---
 
-    function pause() public {
+    function pause() external {
         require(_msgSender() == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
         _pause();
     }    
     
-    function unpause() public {
+    function unpause() external {
         require(_msgSender() == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
         _unpause();
     }
 
-    function setAdmin(address newAdmin) public onlyLosslessRecoveryAdmin {
+    function setAdmin(address newAdmin) external onlyLosslessRecoveryAdmin {
         emit AdminChanged(admin, newAdmin);
         admin = newAdmin;
     }
 
-    function setRecoveryAdmin(address newRecoveryAdmin) public onlyLosslessRecoveryAdmin {
+    function setRecoveryAdmin(address newRecoveryAdmin) external onlyLosslessRecoveryAdmin {
         emit RecoveryAdminChanged(recoveryAdmin, newRecoveryAdmin);
         recoveryAdmin = newRecoveryAdmin;
     }
 
-    function setPauseAdmin(address newPauseAdmin) public onlyLosslessRecoveryAdmin {
+    function setPauseAdmin(address newPauseAdmin) external onlyLosslessRecoveryAdmin {
         emit PauseAdminChanged(pauseAdmin, newPauseAdmin);
         pauseAdmin = newPauseAdmin;
     }
 
     // --- GETTERS ---
 
-    function getVersion() public pure returns (uint256) {
+    function getVersion() external pure returns (uint256) {
         return 1;
     }
 

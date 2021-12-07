@@ -33,7 +33,7 @@ contract TreasuryProtectionStrategy is StrategyBase {
     // --- METHODS ---
 
     // @dev Called by project owners. Sets a whitelist for protected address.
-    function setProtectedAddress(address token, address protectedAddress, address[] calldata whitelist) public onlyProtectionAdmin(token) {
+    function setProtectedAddress(address token, address protectedAddress, address[] calldata whitelist) external onlyProtectionAdmin(token) {
         setWhitelistState(token, protectedAddress, whitelist, true);
         guardian.setProtectedAddress(token, protectedAddress);
     }

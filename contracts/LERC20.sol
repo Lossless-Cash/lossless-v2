@@ -173,19 +173,19 @@ contract LERC20 is Context, IERC20 {
 
     // --- ERC20 methods ---
 
-    function name() public view virtual returns (string memory) {
+    function name() external view virtual returns (string memory) {
         return _name;
     }
 
-    function symbol() public view virtual returns (string memory) {
+    function symbol() external view virtual returns (string memory) {
         return _symbol;
     }
 
-    function decimals() public view virtual returns (uint8) {
+    function decimals() external view virtual returns (uint8) {
         return 18;
     }
 
-    function totalSupply() public view virtual override returns (uint256) {
+    function totalSupply() external view virtual override returns (uint256) {
         return _totalSupply;
     }
 
@@ -193,22 +193,22 @@ contract LERC20 is Context, IERC20 {
         return _balances[account];
     }
 
-    function transfer(address recipient, uint256 amount) public virtual override lssTransfer(recipient, amount) returns (bool) {
+    function transfer(address recipient, uint256 amount) external virtual override lssTransfer(recipient, amount) returns (bool) {
         _transfer(_msgSender(), recipient, amount);
         return true;
     }
 
-    function allowance(address owner, address spender) public view virtual override returns (uint256) {
+    function allowance(address owner, address spender) external view virtual override returns (uint256) {
         return _allowances[owner][spender];
     }
 
-    function approve(address spender, uint256 amount) public virtual override lssAprove(spender, amount) returns (bool) {
+    function approve(address spender, uint256 amount) external virtual override lssAprove(spender, amount) returns (bool) {
         require((amount == 0) || (_allowances[_msgSender()][spender] == 0), "LERC20: Cannot change non zero allowance");
         _approve(_msgSender(), spender, amount);
         return true;
     }
 
-    function transferFrom(address sender, address recipient, uint256 amount) public virtual override lssTransferFrom(sender, recipient, amount) returns (bool) {
+    function transferFrom(address sender, address recipient, uint256 amount) external virtual override lssTransferFrom(sender, recipient, amount) returns (bool) {
         _transfer(sender, recipient, amount);
 
         uint256 currentAllowance = _allowances[sender][_msgSender()];
@@ -218,12 +218,12 @@ contract LERC20 is Context, IERC20 {
         return true;
     }
 
-    function increaseAllowance(address spender, uint256 addedValue) public virtual lssIncreaseAllowance(spender, addedValue) returns (bool) {
+    function increaseAllowance(address spender, uint256 addedValue) external virtual lssIncreaseAllowance(spender, addedValue) returns (bool) {
         _approve(_msgSender(), spender, _allowances[_msgSender()][spender] + addedValue);
         return true;
     }
 
-    function decreaseAllowance(address spender, uint256 subtractedValue) public virtual lssDecreaseAllowance(spender, subtractedValue) returns (bool) {
+    function decreaseAllowance(address spender, uint256 subtractedValue) external virtual lssDecreaseAllowance(spender, subtractedValue) returns (bool) {
         uint256 currentAllowance = _allowances[_msgSender()][spender];
         require(currentAllowance >= subtractedValue, "LERC20: decreased allowance below zero");
         _approve(_msgSender(), spender, currentAllowance - subtractedValue);
