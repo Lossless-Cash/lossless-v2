@@ -27,6 +27,9 @@ contract LosslessControllerV1 is Initializable, ContextUpgradeable, PausableUpgr
     }
 
     function initialize(address _admin, address _recoveryAdmin, address _pauseAdmin) external initializer {
+        require(_admin != address(0) &&
+                _recoveryAdmin != address(0) &&
+                _pauseAdmin != address(0), "LSS: Admins can't be zero adr");
         admin = _admin;
         recoveryAdmin = _recoveryAdmin;
         pauseAdmin = _pauseAdmin;
@@ -45,16 +48,19 @@ contract LosslessControllerV1 is Initializable, ContextUpgradeable, PausableUpgr
     }
 
     function setAdmin(address newAdmin) external onlyLosslessRecoveryAdmin {
+        require(newAdmin != address(0), "LSS: Admin can't be zero adr");
         emit AdminChanged(admin, newAdmin);
         admin = newAdmin;
     }
 
     function setRecoveryAdmin(address newRecoveryAdmin) external onlyLosslessRecoveryAdmin {
+        require(newRecoveryAdmin != address(0), "LSS: Admin can't be zero adr");
         emit RecoveryAdminChanged(recoveryAdmin, newRecoveryAdmin);
         recoveryAdmin = newRecoveryAdmin;
     }
 
     function setPauseAdmin(address newPauseAdmin) external onlyLosslessRecoveryAdmin {
+        require(newPauseAdmin != address(0), "LSS: Admin can't be zero adr");
         emit PauseAdminChanged(pauseAdmin, newPauseAdmin);
         pauseAdmin = newPauseAdmin;
     }

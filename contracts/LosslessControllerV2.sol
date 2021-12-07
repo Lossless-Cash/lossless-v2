@@ -114,6 +114,7 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     // @notice Set a guardian contract.
     // @dev Guardian contract must be trusted as it has some access rights and can modify controller's state.
     function setGuardian(address newGuardian) external onlyLosslessAdmin whenNotPaused {
+        require(newGuardian != address(0), "LSS: Cannot be zero address");
         emit GuardianSet(guardian, newGuardian);
         guardian = newGuardian;
     }
