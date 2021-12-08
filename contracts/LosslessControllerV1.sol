@@ -26,10 +26,7 @@ contract LosslessControllerV1 is Initializable, ContextUpgradeable, PausableUpgr
         _;
     }
 
-    function initialize(address _admin, address _recoveryAdmin, address _pauseAdmin) external initializer {
-        require(_admin != address(0) &&
-                _recoveryAdmin != address(0) &&
-                _pauseAdmin != address(0), "LSS: Admins can't be zero adr");
+    function initialize(address _admin, address _recoveryAdmin, address _pauseAdmin) public initializer {
         admin = _admin;
         recoveryAdmin = _recoveryAdmin;
         pauseAdmin = _pauseAdmin;
@@ -37,37 +34,34 @@ contract LosslessControllerV1 is Initializable, ContextUpgradeable, PausableUpgr
 
     // --- SETTERS ---
 
-    function pause() external {
+    function pause() public {
         require(_msgSender() == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
         _pause();
     }    
     
-    function unpause() external {
+    function unpause() public {
         require(_msgSender() == pauseAdmin, "LOSSLESS: Must be pauseAdmin");
         _unpause();
     }
 
-    function setAdmin(address newAdmin) external onlyLosslessRecoveryAdmin {
-        require(newAdmin != address(0), "LSS: Admin can't be zero adr");
+    function setAdmin(address newAdmin) public onlyLosslessRecoveryAdmin {
         emit AdminChanged(admin, newAdmin);
         admin = newAdmin;
     }
 
-    function setRecoveryAdmin(address newRecoveryAdmin) external onlyLosslessRecoveryAdmin {
-        require(newRecoveryAdmin != address(0), "LSS: Admin can't be zero adr");
+    function setRecoveryAdmin(address newRecoveryAdmin) public onlyLosslessRecoveryAdmin {
         emit RecoveryAdminChanged(recoveryAdmin, newRecoveryAdmin);
         recoveryAdmin = newRecoveryAdmin;
     }
 
-    function setPauseAdmin(address newPauseAdmin) external onlyLosslessRecoveryAdmin {
-        require(newPauseAdmin != address(0), "LSS: Admin can't be zero adr");
+    function setPauseAdmin(address newPauseAdmin) public onlyLosslessRecoveryAdmin {
         emit PauseAdminChanged(pauseAdmin, newPauseAdmin);
         pauseAdmin = newPauseAdmin;
     }
 
     // --- GETTERS ---
 
-    function getVersion() external pure returns (uint256) {
+    function getVersion() public pure returns (uint256) {
         return 1;
     }
 

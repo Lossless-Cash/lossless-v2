@@ -10,6 +10,24 @@ describe('LosslessGuardian', () => {
     protection = await deployProtection(vars.losslessController);
   });
 
+  describe('setGuardian', () => {
+    it('should revert when setting to zero address', async () => {
+      await expect(
+        vars.losslessController
+          .connect(vars.lssAdmin)
+          .setGuardian('0x0000000000000000000000000000000000000000'),
+      ).to.be.revertedWith('LSS: Cannot be zero address');
+    });
+
+    it('should not revert when setting address', async () => {
+      await expect(
+        vars.losslessController
+          .connect(vars.lssAdmin)
+          .setGuardian(protection.guardian.address),
+      ).to.not.be.reverted;
+    });
+  });
+
   describe('setProtectionAdmin', () => {
     describe('when token is not verified', () => {
       it('should revert', async () => {
