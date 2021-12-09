@@ -100,6 +100,12 @@ async function main() {
     ],
   });
   console.log('verified!');
+  console.log('Verifiying controllerV2...');
+  await hre.run('verify:verify', {
+    address: controllerV2.address,
+    constructorArguments: [],
+  });
+  console.log('verified!');
 
   console.log('ControllerV1:  %s', controllerV1.address);
   console.log('ControllerV2:  %s', controllerV2.address);

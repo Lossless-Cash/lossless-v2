@@ -5,7 +5,7 @@ const { setupControllerAndTokens, deployProtection } = require('../utils');
 let vars;
 let protection;
 
-describe.only('TreasuryProtectionStrategy', () => {
+describe('TreasuryProtectionStrategy', () => {
   beforeEach(async () => {
     vars = await setupControllerAndTokens();
     protection = await deployProtection(vars.losslessController);

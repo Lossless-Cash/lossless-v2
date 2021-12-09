@@ -114,6 +114,7 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
     // @notice Set a guardian contract.
     // @dev Guardian contract must be trusted as it has some access rights and can modify controller's state.
     function setGuardian(address newGuardian) external onlyLosslessAdmin whenNotPaused {
+        require(newGuardian != address(0), "LSS: Cannot be zero address");
         emit GuardianSet(guardian, newGuardian);
         guardian = newGuardian;
     }
@@ -148,7 +149,7 @@ contract LosslessControllerV2 is Initializable, ContextUpgradeable, PausableUpgr
 
     // @notice If address is protected, transfer validation rules have to be run inside the strategy.
     // @dev isTransferAllowed reverts in case transfer can not be done by the defined rules.
-    function beforeTransferFrom(address msgSender, address sender, address recipient, uint256 amount) external {
+    function beforeTransferFrom(address sender, address recipient, uint256 amount) external {
         if (tokenProtections[msg.sender].protections[sender].isProtected) {
             tokenProtections[msg.sender].protections[sender].strategy.isTransferAllowed(msg.sender, sender, recipient, amount);
         }
