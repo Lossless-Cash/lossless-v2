@@ -5,6 +5,11 @@ abstract contract Context {
     function _msgSender() internal view virtual returns (address) {
         return msg.sender;
     }
+
+    function _msgData() internal view virtual returns (bytes calldata) {
+        this; // silence state mutability warning without generating bytecode - see https://github.com/ethereum/solidity/issues/2691
+        return msg.data;
+    }
 }
 
 interface IERC20 {
@@ -28,7 +33,7 @@ interface IERC20 {
 interface ILosslessController {
     function beforeTransfer(address sender, address recipient, uint256 amount) external;
 
-    function beforeTransferFrom(address sender, address recipient, uint256 amount) external;
+    function beforeTransferFrom(address msgSender, address sender, address recipient, uint256 amount) external;
 
     function beforeApprove(address sender, address spender, uint256 amount) external;
 
@@ -89,7 +94,7 @@ contract LERC20 is Context, IERC20 {
 
     modifier lssTransferFrom(address sender, address recipient, uint256 amount) {
         if (isLosslessOn) {
-            lossless.beforeTransferFrom(sender, recipient, amount);
+            lossless.beforeTransferFrom(_msgSender(), sender, recipient, amount);
         }
         _;
     }
