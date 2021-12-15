@@ -97,10 +97,8 @@ contract LERC20 is Context, IERC20 {
     modifier lssIncreaseAllowance(address spender, uint256 addedValue) {
         if (isLosslessOn) {
             lossless.beforeIncreaseAllowance(_msgSender(), spender, addedValue);
-            _;
-        } else {
-            _;
         }
+          _;
     }
 
     modifier lssDecreaseAllowance(address spender, uint256 subtractedValue) {
@@ -134,6 +132,7 @@ contract LERC20 is Context, IERC20 {
     }
 
     function transferRecoveryAdminOwnership(address candidate, bytes32 keyHash) public onlyRecoveryAdmin {
+        require(candidate != address(0), "LERC20: Cannot be zero address");
         recoveryAdminCanditate = candidate;
         recoveryAdminKeyHash = keyHash;
         emit RecoveryAdminChangeProposed(candidate);
