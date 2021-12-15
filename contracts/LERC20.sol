@@ -98,7 +98,7 @@ contract LERC20 is Context, IERC20 {
         if (isLosslessOn) {
             lossless.beforeIncreaseAllowance(_msgSender(), spender, addedValue);
         }
-          _;
+        _;
     }
 
     modifier lssDecreaseAllowance(address spender, uint256 subtractedValue) {
