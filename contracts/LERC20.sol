@@ -28,7 +28,7 @@ interface IERC20 {
 interface ILosslessController {
     function beforeTransfer(address sender, address recipient, uint256 amount) external;
 
-    function beforeTransferFrom(address sender, address recipient, uint256 amount) external;
+    function beforeTransferFrom(address msgSender, address sender, address recipient, uint256 amount) external;
 
     function beforeApprove(address sender, address spender, uint256 amount) external;
 
@@ -89,7 +89,7 @@ contract LERC20 is Context, IERC20 {
 
     modifier lssTransferFrom(address sender, address recipient, uint256 amount) {
         if (isLosslessOn) {
-            lossless.beforeTransferFrom(sender, recipient, amount);
+            lossless.beforeTransferFrom(_msgSender(), sender, recipient, amount);
         }
         _;
     }
@@ -97,8 +97,10 @@ contract LERC20 is Context, IERC20 {
     modifier lssIncreaseAllowance(address spender, uint256 addedValue) {
         if (isLosslessOn) {
             lossless.beforeIncreaseAllowance(_msgSender(), spender, addedValue);
+            _;
+        } else {
+            _;
         }
-        _;
     }
 
     modifier lssDecreaseAllowance(address spender, uint256 subtractedValue) {
@@ -126,14 +128,12 @@ contract LERC20 is Context, IERC20 {
         }
     }
 
-    function setLosslessAdmin(address newAdmin) external onlyRecoveryAdmin {
-        require(newAdmin != address(0), "LERC20: Cannot be zero address");
+    function setLosslessAdmin(address newAdmin) public onlyRecoveryAdmin {
         emit AdminChanged(admin, newAdmin);
         admin = newAdmin;
     }
 
-    function transferRecoveryAdminOwnership(address candidate, bytes32 keyHash) external onlyRecoveryAdmin {
-        require(candidate != address(0), "LERC20: Cannot be zero address");
+    function transferRecoveryAdminOwnership(address candidate, bytes32 keyHash) public onlyRecoveryAdmin {
         recoveryAdminCanditate = candidate;
         recoveryAdminKeyHash = keyHash;
         emit RecoveryAdminChangeProposed(candidate);
@@ -146,13 +146,13 @@ contract LERC20 is Context, IERC20 {
         recoveryAdmin = recoveryAdminCanditate;
     }
 
-    function proposeLosslessTurnOff() external onlyRecoveryAdmin {
+    function proposeLosslessTurnOff() public onlyRecoveryAdmin {
         losslessTurnOffTimestamp = block.timestamp + timelockPeriod;
         isLosslessTurnOffProposed = true;
         emit LosslessTurnOffProposed(losslessTurnOffTimestamp);
     }
 
-    function executeLosslessTurnOff() external onlyRecoveryAdmin {
+    function executeLosslessTurnOff() public onlyRecoveryAdmin {
         require(isLosslessTurnOffProposed, "LERC20: TurnOff not proposed");
         require(losslessTurnOffTimestamp <= block.timestamp, "LERC20: Time lock in progress");
         isLosslessOn = false;
@@ -160,7 +160,7 @@ contract LERC20 is Context, IERC20 {
         emit LosslessTurnedOff();
     }
 
-    function executeLosslessTurnOn() external onlyRecoveryAdmin {
+    function executeLosslessTurnOn() public onlyRecoveryAdmin {
         isLosslessTurnOffProposed = false;
         isLosslessOn = true;
         emit LosslessTurnedOn();
@@ -168,19 +168,19 @@ contract LERC20 is Context, IERC20 {
 
     // --- ERC20 methods ---
 
-    function name() external view virtual returns (string memory) {
+    function name() public view virtual returns (string memory) {
         return _name;
     }
 
-    function symbol() external view virtual returns (string memory) {
+    function symbol() public view virtual returns (string memory) {
         return _symbol;
     }
 
-    function decimals() external view virtual returns (uint8) {
+    function decimals() public view virtual returns (uint8) {
         return 18;
     }
 
-    function totalSupply() external view virtual override returns (uint256) {
+    function totalSupply() public view virtual override returns (uint256) {
         return _totalSupply;
     }
 
@@ -188,22 +188,22 @@ contract LERC20 is Context, IERC20 {
         return _balances[account];
     }
 
-    function transfer(address recipient, uint256 amount) external virtual override lssTransfer(recipient, amount) returns (bool) {
+    function transfer(address recipient, uint256 amount) public virtual override lssTransfer(recipient, amount) returns (bool) {
         _transfer(_msgSender(), recipient, amount);
         return true;
     }
 
-    function allowance(address owner, address spender) external view virtual override returns (uint256) {
+    function allowance(address owner, address spender) public view virtual override returns (uint256) {
         return _allowances[owner][spender];
     }
 
-    function approve(address spender, uint256 amount) external virtual override lssAprove(spender, amount) returns (bool) {
+    function approve(address spender, uint256 amount) public virtual override lssAprove(spender, amount) returns (bool) {
         require((amount == 0) || (_allowances[_msgSender()][spender] == 0), "LERC20: Cannot change non zero allowance");
         _approve(_msgSender(), spender, amount);
         return true;
     }
 
-    function transferFrom(address sender, address recipient, uint256 amount) external virtual override lssTransferFrom(sender, recipient, amount) returns (bool) {
+    function transferFrom(address sender, address recipient, uint256 amount) public virtual override lssTransferFrom(sender, recipient, amount) returns (bool) {
         _transfer(sender, recipient, amount);
 
         uint256 currentAllowance = _allowances[sender][_msgSender()];
@@ -213,16 +213,16 @@ contract LERC20 is Context, IERC20 {
         return true;
     }
 
-    function increaseAllowance(address spender, uint256 addedValue) external virtual lssIncreaseAllowance(spender, addedValue) returns (bool) {
+    function increaseAllowance(address spender, uint256 addedValue) public virtual lssIncreaseAllowance(spender, addedValue) returns (bool) {
         _approve(_msgSender(), spender, _allowances[_msgSender()][spender] + addedValue);
         return true;
     }
 
-    function decreaseAllowance(address spender, uint256 subtractedValue) external virtual lssDecreaseAllowance(spender, subtractedValue) returns (bool) {
+    function decreaseAllowance(address spender, uint256 subtractedValue) public virtual lssDecreaseAllowance(spender, subtractedValue) returns (bool) {
         uint256 currentAllowance = _allowances[_msgSender()][spender];
         require(currentAllowance >= subtractedValue, "LERC20: decreased allowance below zero");
         _approve(_msgSender(), spender, currentAllowance - subtractedValue);
-
+    
         return true;
     }
 
